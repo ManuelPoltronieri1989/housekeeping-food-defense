@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
-import { Shield, Star, ChevronUp, ChevronDown, Eye, Trash2, Search, X } from 'lucide-react';
+import { Shield, Star, ChevronUp, ChevronDown, Eye, Pencil, Trash2, Search, X, Save, Building2, AlertTriangle, Check } from 'lucide-react';
 import { toast } from 'sonner';
-import { AUDIT_HISTORY, AUDIT_HISTORY_TOTAL, AREA_COLORS, AREA_ORDER } from '../mock';
+import { AUDIT_HISTORY, AUDIT_HISTORY_TOTAL, AREA_COLORS, AREA_ORDER, AREAS_REPARTI, SAFETY_QUESTIONS, QUALITY_QUESTIONS } from '../mock';
 import { Input } from '../components/ui/input';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription
@@ -20,7 +20,7 @@ const TypeBadge = ({ type }) => {
   );
 };
 
-const AuditRow = ({ audit, onView, onDelete }) => {
+const AuditRow = ({ audit, onView, onEdit, onDelete }) => {
   const c = AREA_COLORS[audit.area];
   const isLow = audit.type === 'Safety' ? audit.score < 2 : audit.score < 3;
   return (
@@ -32,10 +32,13 @@ const AuditRow = ({ audit, onView, onDelete }) => {
       </div>
       <div className={`text-[14px] font-bold ${isLow ? 'text-red-600' : 'text-emerald-600'}`}>{audit.score.toFixed(2)}</div>
       <div className="flex items-center gap-1">
-        <button onClick={() => onView(audit)} className="w-8 h-8 rounded-md hover:bg-gray-100 flex items-center justify-center text-gray-500 hover:text-gray-700 transition-colors">
+        <button onClick={() => onView(audit)} className="w-8 h-8 rounded-md hover:bg-blue-50 flex items-center justify-center text-gray-500 hover:text-blue-600 transition-colors" title="Visualizza scheda">
           <Eye className="w-4 h-4" />
         </button>
-        <button onClick={() => onDelete(audit)} className="w-8 h-8 rounded-md hover:bg-red-50 flex items-center justify-center text-gray-400 hover:text-red-600 transition-colors">
+        <button onClick={() => onEdit(audit)} className="w-8 h-8 rounded-md hover:bg-gray-100 flex items-center justify-center text-gray-500 hover:text-gray-700 transition-colors" title="Modifica">
+          <Pencil className="w-4 h-4" />
+        </button>
+        <button onClick={() => onDelete(audit)} className="w-8 h-8 rounded-md hover:bg-red-50 flex items-center justify-center text-gray-400 hover:text-red-600 transition-colors" title="Elimina">
           <Trash2 className="w-4 h-4" />
         </button>
       </div>
@@ -43,7 +46,7 @@ const AuditRow = ({ audit, onView, onDelete }) => {
   );
 };
 
-const WeekGroup = ({ group, onView, onDelete }) => {
+const WeekGroup = ({ group, onView, onEdit, onDelete }) => {
   const [open, setOpen] = useState(group.week === 22);
   return (
     <div className="bg-white rounded-xl border border-gray-200/80 shadow-sm overflow-hidden">
@@ -63,12 +66,153 @@ const WeekGroup = ({ group, onView, onDelete }) => {
       {open && (
         <div className="bg-white">
           {group.audits.map((a) => (
-            <AuditRow key={a.id} audit={a} onView={onView} onDelete={onDelete} />
+            <AuditRow key={a.id} audit={a} onView={onView} onEdit={onEdit} onDelete={onDelete} />
           ))}
         </div>
       )}
     </div>
   );
+};
+
+// Deterministic "scheda" generation based on audit id + average score
+const buildSchedaData = (audit) => {
+  const isSafety = audit.type === 'Safety';
+  const questions = isSafety ? SAFETY_QUESTIONS : QUALITY_QUESTIONS;
+  const maxS = isSafety ? 3 : 5;
+  const minS = isSafety ? 0 : 1;
+  const threshold = isSafety ? 2 : 3;
+  const reparti = (AREAS_REPARTI[audit.area] || ['Reparto principale']);
+  const target = audit.score; // average target
+  // Deterministic pseudo-random per audit
+  const seed = (audit.id * 9301 + 49297) % 233280;
+  let rng = seed;
+  const rand = () => { rng = (rng * 9301 + 49297) % 233280; return rng / 233280; };
+
+  const sectorsData = reparti.map((sector) => {
+    const qResults = questions.map((q) => {
+      // bias around target, occasionally lower
+      const variance = (rand() - 0.5) * 1.4;
+      let v = Math.round(target + variance);
+      if (v > maxS) v = maxS;
+      if (v < minS) v = minS;
+      const isCrit = v < threshold;
+      return {
+        id: q.id,
+        text: q.text,
+        score: v,
+        critical: isCrit,
+        commento: isCrit ? `Verificare ${sector.toLowerCase()}, riscontrate anomalie da approfondire. Richiesto intervento correttivo.` : null,
+      };
+    });
+    return { name: sector, results: qResults };
+  });
+  return { sectorsData, maxS, minS, threshold };
+};
+
+const SchedaDialog = ({ audit, onClose }) => {
+  const data = useMemo(() => (audit ? buildSchedaData(audit) : null), [audit]);
+  if (!audit || !data) return null;
+  const c = AREA_COLORS[audit.area];
+  const totalQ = data.sectorsData.reduce((s, x) => s + x.results.length, 0);
+  const totalCrit = data.sectorsData.reduce((s, x) => s + x.results.filter((r) => r.critical).length, 0);
+
+  return (
+    <Dialog open={!!audit} onOpenChange={onClose}>
+      <DialogContent className="max-w-3xl max-h-[88vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>Scheda Audit</DialogTitle>
+          <DialogDescription>Riepilogo completo dell'audit selezionato</DialogDescription>
+        </DialogHeader>
+
+        {/* Header summary */}
+        <div className="rounded-xl border p-4" style={{ backgroundColor: c?.light, borderColor: c?.bg }}>
+          <div className="flex items-start justify-between flex-wrap gap-3">
+            <div>
+              <div className="flex items-center gap-2 mb-1.5">
+                <TypeBadge type={audit.type} />
+                <span className="font-bold text-[16px]" style={{ color: c?.text }}>{audit.area}</span>
+              </div>
+              <div className="text-[12.5px] text-gray-600">{audit.date} — Ispettore: <span className="font-semibold text-gray-800">{audit.inspector}</span></div>
+            </div>
+            <div className="text-right">
+              <div className="text-[11px] text-gray-500 uppercase tracking-wider font-semibold">Punteggio</div>
+              <div className="text-3xl font-bold mt-0.5" style={{ color: c?.text }}>{audit.score.toFixed(2)}</div>
+              <div className="text-[11px] text-gray-500">su {data.maxS}.00</div>
+            </div>
+          </div>
+          <div className="grid grid-cols-3 gap-3 mt-4 pt-4 border-t border-white/60">
+            <div>
+              <div className="text-[10.5px] text-gray-500 uppercase tracking-wider font-semibold">Domande</div>
+              <div className="text-lg font-bold text-gray-800 mt-1">{totalQ}</div>
+            </div>
+            <div>
+              <div className="text-[10.5px] text-gray-500 uppercase tracking-wider font-semibold">Reparti</div>
+              <div className="text-lg font-bold text-gray-800 mt-1">{data.sectorsData.length}</div>
+            </div>
+            <div>
+              <div className="text-[10.5px] text-gray-500 uppercase tracking-wider font-semibold">Criticità</div>
+              <div className={`text-lg font-bold mt-1 ${totalCrit > 0 ? 'text-red-600' : 'text-emerald-600'}`}>{totalCrit}</div>
+            </div>
+          </div>
+        </div>
+
+        {/* Sectors */}
+        <div className="space-y-3 mt-2">
+          {data.sectorsData.map((sec) => (
+            <div key={sec.name} className="bg-white rounded-xl border border-gray-200/80 overflow-hidden">
+              <div className="flex items-center gap-3 px-4 py-3 border-b border-gray-100">
+                <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ backgroundColor: c?.soft }}>
+                  <Building2 className="w-4 h-4" style={{ color: c?.accent }} />
+                </div>
+                <div className="font-semibold text-[14px] text-gray-900">{sec.name}</div>
+              </div>
+              {sec.results.map((r, i) => (
+                <div key={r.id} className={`px-4 py-3 ${i > 0 ? 'border-t border-gray-100' : ''} ${r.critical ? 'bg-red-50/40' : ''}`}>
+                  <div className="flex items-start gap-4">
+                    <div className="flex-1 min-w-0">
+                      <div className="text-[10.5px] font-semibold text-gray-400 tracking-wider">{r.id}</div>
+                      <div className="text-[13px] text-gray-700 mt-0.5 leading-relaxed">{r.text}</div>
+                      {r.critical && r.commento && (
+                        <div className="mt-2 rounded-md border border-red-200 bg-white px-3 py-2 flex items-start gap-2">
+                          <AlertTriangle className="w-3.5 h-3.5 text-red-600 mt-0.5 shrink-0" />
+                          <div className="text-[12px] text-gray-700 leading-relaxed">{r.commento}</div>
+                        </div>
+                      )}
+                    </div>
+                    <div className={`shrink-0 w-12 h-12 rounded-lg flex items-center justify-center text-[16px] font-bold ${
+                      r.critical ? 'bg-red-100 text-red-700' : 'bg-emerald-50 text-emerald-700'
+                    }`}>
+                      {r.score}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ))}
+        </div>
+
+        <DialogFooter className="mt-3">
+          <button onClick={onClose} className="flex items-center gap-2 px-4 h-9 text-sm font-medium border border-gray-200 rounded-lg hover:bg-gray-50">
+            <Check className="w-4 h-4" />
+            Chiudi
+          </button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+};
+
+// Convert "GG/MM/YYYY" -> "YYYY-MM-DD" for input[type=date]
+const toInputDate = (it) => {
+  if (!it) return '';
+  const m = it.match(/(\d{2})\/(\d{2})\/(\d{4})/);
+  return m ? `${m[3]}-${m[2]}-${m[1]}` : '';
+};
+// "YYYY-MM-DD" -> "GG/MM/YYYY"
+const fromInputDate = (it) => {
+  if (!it) return '';
+  const m = it.match(/(\d{4})-(\d{2})-(\d{2})/);
+  return m ? `${m[3]}/${m[2]}/${m[1]}` : it;
 };
 
 export default function StoricoAudit() {
@@ -77,7 +221,51 @@ export default function StoricoAudit() {
   const [filterType, setFilterType] = useState('all');
   const [filterArea, setFilterArea] = useState('all');
   const [viewing, setViewing] = useState(null);
+  const [editing, setEditing] = useState(null);
   const [deleting, setDeleting] = useState(null);
+
+  // edit form state
+  const [fType, setFType] = useState('Safety');
+  const [fArea, setFArea] = useState('');
+  const [fDate, setFDate] = useState('');
+  const [fInspector, setFInspector] = useState('');
+  const [fScore, setFScore] = useState('');
+
+  const openEdit = (audit) => {
+    setEditing(audit);
+    setFType(audit.type);
+    setFArea(audit.area);
+    setFDate(toInputDate(audit.date));
+    setFInspector(audit.inspector);
+    setFScore(String(audit.score));
+  };
+
+  const saveEdit = () => {
+    if (!fArea) { toast.error("Seleziona un'area"); return; }
+    if (!fInspector.trim()) { toast.error("Inserisci il nome dell'ispettore"); return; }
+    const scoreNum = parseFloat(fScore);
+    const maxS = fType === 'Safety' ? 3 : 5;
+    const minS = fType === 'Safety' ? 0 : 1;
+    if (Number.isNaN(scoreNum) || scoreNum < minS || scoreNum > maxS) {
+      toast.error(`Punteggio non valido (${minS}–${maxS})`);
+      return;
+    }
+    const updated = {
+      ...editing,
+      type: fType,
+      area: fArea,
+      date: fromInputDate(fDate),
+      inspector: fInspector,
+      score: +scoreNum.toFixed(2),
+    };
+    setHistory((prev) => prev.map((g) => {
+      const audits = g.audits.map((a) => (a.id === editing.id ? updated : a));
+      const avg = audits.length ? +(audits.reduce((s, a) => s + a.score, 0) / audits.length).toFixed(2) : 0;
+      return { ...g, audits, avg };
+    }));
+    toast.success('Audit aggiornato', { description: `${updated.area} — punteggio ${updated.score.toFixed(2)}` });
+    setEditing(null);
+  };
 
   const filtered = useMemo(() => {
     return history.map((g) => ({
@@ -98,10 +286,17 @@ export default function StoricoAudit() {
 
   const onDelete = (audit) => setDeleting(audit);
   const confirmDelete = () => {
-    setHistory((prev) => prev.map((g) => ({ ...g, audits: g.audits.filter((a) => a.id !== deleting.id), count: g.audits.filter((a) => a.id !== deleting.id).length })).filter((g) => g.audits.length > 0));
+    setHistory((prev) => prev.map((g) => {
+      const audits = g.audits.filter((a) => a.id !== deleting.id);
+      const avg = audits.length ? +(audits.reduce((s, a) => s + a.score, 0) / audits.length).toFixed(2) : 0;
+      return { ...g, audits, count: audits.length, avg };
+    }).filter((g) => g.audits.length > 0));
     toast.success('Audit eliminato');
     setDeleting(null);
   };
+
+  const fMaxS = fType === 'Safety' ? 3 : 5;
+  const fMinS = fType === 'Safety' ? 0 : 1;
 
   return (
     <div className="space-y-6">
@@ -154,32 +349,69 @@ export default function StoricoAudit() {
           </div>
         ) : (
           filtered.map((g) => (
-            <WeekGroup key={g.week} group={g} onView={setViewing} onDelete={onDelete} />
+            <WeekGroup key={g.week} group={g} onView={setViewing} onEdit={openEdit} onDelete={onDelete} />
           ))
         )}
       </div>
 
-      {/* View dialog */}
-      <Dialog open={!!viewing} onOpenChange={() => setViewing(null)}>
+      {/* Scheda view dialog */}
+      <SchedaDialog audit={viewing} onClose={() => setViewing(null)} />
+
+      {/* Edit dialog */}
+      <Dialog open={!!editing} onOpenChange={() => setEditing(null)}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>Dettaglio Audit</DialogTitle>
-            <DialogDescription>Informazioni sull'audit selezionato</DialogDescription>
+            <DialogTitle>Modifica Audit</DialogTitle>
+            <DialogDescription>Aggiorna i dati dell'audit e salva le modifiche.</DialogDescription>
           </DialogHeader>
-          {viewing && (
-            <div className="space-y-3 text-sm">
-              <div className="flex items-center gap-2">
-                <TypeBadge type={viewing.type} />
-                <span className="font-semibold" style={{ color: AREA_COLORS[viewing.area]?.text }}>{viewing.area}</span>
+          <div className="space-y-3">
+            <div>
+              <label className="text-xs font-medium text-gray-600">Tipo</label>
+              <Select value={fType} onValueChange={setFType}>
+                <SelectTrigger className="mt-1.5 h-10"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Safety">Safety (0–3)</SelectItem>
+                  <SelectItem value="Quality">Quality (1–5)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <label className="text-xs font-medium text-gray-600">Area</label>
+              <Select value={fArea} onValueChange={setFArea}>
+                <SelectTrigger className="mt-1.5 h-10"><SelectValue placeholder="Seleziona area" /></SelectTrigger>
+                <SelectContent>{AREA_ORDER.map((a) => <SelectItem key={a} value={a}>{a}</SelectItem>)}</SelectContent>
+              </Select>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs font-medium text-gray-600">Data</label>
+                <Input type="date" value={fDate} onChange={(e) => setFDate(e.target.value)} className="mt-1.5 h-10" />
               </div>
-              <div className="grid grid-cols-2 gap-3 pt-2">
-                <div><div className="text-xs text-gray-500">Data</div><div className="font-medium">{viewing.date}</div></div>
-                <div><div className="text-xs text-gray-500">Ispettore</div><div className="font-medium">{viewing.inspector}</div></div>
-                <div><div className="text-xs text-gray-500">Punteggio</div><div className="font-bold text-emerald-600 text-lg">{viewing.score.toFixed(2)}</div></div>
-                <div><div className="text-xs text-gray-500">Tipo</div><div className="font-medium">{viewing.type}</div></div>
+              <div>
+                <label className="text-xs font-medium text-gray-600">Punteggio ({fMinS}–{fMaxS})</label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  min={fMinS}
+                  max={fMaxS}
+                  value={fScore}
+                  onChange={(e) => setFScore(e.target.value)}
+                  className="mt-1.5 h-10"
+                />
               </div>
             </div>
-          )}
+            <div>
+              <label className="text-xs font-medium text-gray-600">Ispettore</label>
+              <Input value={fInspector} onChange={(e) => setFInspector(e.target.value)} placeholder="Nome ispettore" className="mt-1.5 h-10" />
+            </div>
+          </div>
+          <DialogFooter>
+            <button onClick={() => setEditing(null)} className="px-4 h-9 text-sm font-medium border border-gray-200 rounded-lg hover:bg-gray-50">Annulla</button>
+            <button onClick={saveEdit} className="flex items-center gap-2 px-4 h-9 text-sm font-medium text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg">
+              <Save className="w-4 h-4" />
+              Salva modifiche
+            </button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 
