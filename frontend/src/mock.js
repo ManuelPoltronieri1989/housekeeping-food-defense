@@ -137,24 +137,27 @@ function buildAuditHistory() {
   let id = 1;
   for (let w = 22; w >= 14; w--) {
     const audits = [];
-    const count = w === 22 ? 16 : 8 + ((w * 3) % 7);
-    for (let i = 0; i < count; i++) {
-      const area = AUDIT_AREAS_FOR_HISTORY[i % AUDIT_AREAS_FOR_HISTORY.length];
-      const type = i % 2 === 0 ? 'Safety' : 'Quality';
-      const dayOffset = i % 5;
-      const date = new Date(2026, 4, 29 - (22 - w) * 7 - dayOffset);
-      const score = type === 'Safety'
-        ? +(2.6 + Math.random() * 0.4).toFixed(2)
-        : +(4.3 + Math.random() * 0.7).toFixed(2);
-      audits.push({
-        id: id++,
-        type,
-        area,
-        date: date.toLocaleDateString('it-IT'),
-        inspector: INSPECTOR_POOL[(i + w) % INSPECTOR_POOL.length],
-        score,
+    // 16 audit per settimana: 8 Safety + 8 Quality (uno per area)
+    ['Safety', 'Quality'].forEach((type) => {
+      AUDIT_AREAS_FOR_HISTORY.forEach((area, idx) => {
+        const dayOffset = idx % 5;
+        const date = new Date(2026, 4, 29 - (22 - w) * 7 - dayOffset);
+        // deterministic pseudo-random per (w, area, type) for stable values
+        const seed = (w * 131 + idx * 17 + (type === 'Safety' ? 7 : 23)) % 100;
+        const rnd = seed / 100;
+        const score = type === 'Safety'
+          ? +(2.55 + rnd * 0.45).toFixed(2)
+          : +(4.20 + rnd * 0.80).toFixed(2);
+        audits.push({
+          id: id++,
+          type,
+          area,
+          date: date.toLocaleDateString('it-IT'),
+          inspector: INSPECTOR_POOL[(idx + w + (type === 'Safety' ? 0 : 3)) % INSPECTOR_POOL.length],
+          score,
+        });
       });
-    }
+    });
     const avg = +(audits.reduce((s, a) => s + a.score, 0) / audits.length).toFixed(2);
     groups.push({ week: w, year: 2026, count: audits.length, avg, audits });
   }
