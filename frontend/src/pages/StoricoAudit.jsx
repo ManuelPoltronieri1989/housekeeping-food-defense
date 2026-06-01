@@ -47,8 +47,8 @@ const AuditRow = ({ audit, onView, onEdit, onDelete }) => {
   );
 };
 
-const WeekGroup = ({ group, onView, onEdit, onDelete }) => {
-  const [open, setOpen] = useState(group.week === 22);
+const WeekGroup = ({ group, defaultOpen = false, onView, onEdit, onDelete }) => {
+  const [open, setOpen] = useState(defaultOpen);
   return (
     <div className="bg-white rounded-xl border border-gray-200/80 shadow-sm overflow-hidden">
       <button
@@ -203,6 +203,24 @@ const SchedaDialog = ({ audit, onClose }) => {
   );
 };
 
+// ISO week number for a Date
+const getISOWeek = (date) => {
+  const target = new Date(date.valueOf());
+  const dayNr = (date.getDay() + 6) % 7;
+  target.setDate(target.getDate() - dayNr + 3);
+  const firstThursday = target.valueOf();
+  target.setMonth(0, 1);
+  if (target.getDay() !== 4) {
+    target.setMonth(0, 1 + ((4 - target.getDay()) + 7) % 7);
+  }
+  return 1 + Math.ceil((firstThursday - target) / 604800000);
+};
+const parseItDate = (s) => {
+  if (!s) return new Date();
+  const [dd, mm, yyyy] = s.split('/').map(Number);
+  return new Date(yyyy, mm - 1, dd);
+};
+
 // Convert "GG/MM/YYYY" -> "YYYY-MM-DD" for input[type=date]
 const toInputDate = (it) => {
   if (!it) return '';
@@ -235,19 +253,43 @@ export default function StoricoAudit() {
 
   const isUserAudit = (a) => typeof a?.id === 'string' && a.id.startsWith('user-');
 
-  // Merge user audits (from context) with mock history into the latest week
+  // Merge user audits (from context) into the correct ISO week (existing or new)
   const allHistory = useMemo(() => {
     const userList = [...userAudits.safety, ...userAudits.quality];
-    if (userList.length === 0 || history.length === 0) return history;
-    const [latest, ...rest] = history;
-    const mergedAudits = [...userList, ...latest.audits];
-    const avg = mergedAudits.length
-      ? +(mergedAudits.reduce((s, a) => s + a.score, 0) / mergedAudits.length).toFixed(2)
-      : 0;
-    return [
-      { ...latest, audits: mergedAudits, count: mergedAudits.length, avg },
-      ...rest,
-    ];
+    if (userList.length === 0) return history;
+
+    // Group user audits by ISO week
+    const userByKey = {};
+    userList.forEach((a) => {
+      const d = parseItDate(a.date);
+      const wk = getISOWeek(d);
+      const yr = d.getFullYear();
+      const key = `${yr}-${wk}`;
+      if (!userByKey[key]) userByKey[key] = { week: wk, year: yr, audits: [] };
+      userByKey[key].audits.push(a);
+    });
+
+    // Merge with mock history
+    const map = new Map();
+    history.forEach((g) => map.set(`${g.year}-${g.week}`, { ...g, audits: [...g.audits] }));
+    Object.entries(userByKey).forEach(([key, ug]) => {
+      if (map.has(key)) {
+        const existing = map.get(key);
+        existing.audits = [...ug.audits, ...existing.audits];
+      } else {
+        map.set(key, { week: ug.week, year: ug.year, audits: ug.audits });
+      }
+    });
+
+    // Recompute count + avg, sort latest week first
+    const groups = Array.from(map.values()).map((g) => {
+      const avg = g.audits.length
+        ? +(g.audits.reduce((s, a) => s + a.score, 0) / g.audits.length).toFixed(2)
+        : 0;
+      return { ...g, count: g.audits.length, avg };
+    });
+    groups.sort((a, b) => (b.year - a.year) || (b.week - a.week));
+    return groups;
   }, [history, userAudits]);
 
   const totalAuditsCount = useMemo(
@@ -388,8 +430,8 @@ export default function StoricoAudit() {
             Nessun audit trovato con i filtri selezionati
           </div>
         ) : (
-          filtered.map((g) => (
-            <WeekGroup key={g.week} group={g} onView={setViewing} onEdit={openEdit} onDelete={onDelete} />
+          filtered.map((g, idx) => (
+            <WeekGroup key={`${g.year}-${g.week}`} group={g} defaultOpen={idx === 0} onView={setViewing} onEdit={openEdit} onDelete={onDelete} />
           ))
         )}
       </div>
