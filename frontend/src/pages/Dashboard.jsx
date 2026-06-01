@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   Shield, ClipboardCheck, TrendingUp, AlertTriangle,
   ChevronDown, ChevronUp, Minus, ArrowDown, ArrowUp
@@ -16,6 +16,24 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue
 } from '../components/ui/select';
 import { useAudit } from '../context/AuditContext';
+
+// ISO week helpers
+const getISOWeek = (date) => {
+  const target = new Date(date.valueOf());
+  const dayNr = (date.getDay() + 6) % 7;
+  target.setDate(target.getDate() - dayNr + 3);
+  const firstThursday = target.valueOf();
+  target.setMonth(0, 1);
+  if (target.getDay() !== 4) {
+    target.setMonth(0, 1 + ((4 - target.getDay()) + 7) % 7);
+  }
+  return 1 + Math.ceil((firstThursday - target) / 604800000);
+};
+const parseItDate = (s) => {
+  if (!s) return new Date();
+  const [dd, mm, yyyy] = s.split('/').map(Number);
+  return new Date(yyyy, mm - 1, dd);
+};
 
 const StatCard = ({ label, value, sub, Icon, iconBg, iconColor }) => (
   <div className="bg-white rounded-xl border border-gray-200/80 p-5 shadow-sm hover:shadow-md transition-shadow duration-200">
@@ -75,13 +93,16 @@ const CriticitaCard = ({ count, sub, items }) => {
 
 const AreaRow = ({ name, score }) => {
   const c = AREA_COLORS[name];
+  const hasValue = score !== null && score !== undefined;
   return (
     <div
       className="flex items-center justify-between pl-4 pr-4 py-3 border-l-4 transition-colors hover:brightness-[0.98]"
       style={{ backgroundColor: c.light, borderColor: c.accent }}
     >
       <div className="font-semibold text-[14px]" style={{ color: c.text }}>{name}</div>
-      <div className="font-bold text-[14px]" style={{ color: c.text }}>{score.toFixed(2)}</div>
+      <div className="font-bold text-[14px]" style={{ color: hasValue ? c.text : '#9ca3af' }}>
+        {hasValue ? score.toFixed(2) : '—'}
+      </div>
     </div>
   );
 };
@@ -137,7 +158,7 @@ const CustomTooltip = ({ active, payload, label }) => {
 };
 
 export default function Dashboard() {
-  const { getCriticita, getStats } = useAudit();
+  const { getCriticita, getStats, userAudits } = useAudit();
   const [mode, setMode] = useState('safety');
   const [selectedWeek, setSelectedWeek] = useState('Settimana 22 / 2026');
   const [monthA, setMonthA] = useState('Maggio 2026');
@@ -152,10 +173,76 @@ export default function Dashboard() {
   const criticitaList = getCriticita(mode);
   const criticitaCount = criticitaList.length;
 
+  // Aggregate user audits by week+area
+  const userWeekData = useMemo(() => {
+    const userList = [...userAudits.safety, ...userAudits.quality];
+    const byWeek = {};
+    userList.forEach((a) => {
+      const d = parseItDate(a.date);
+      const wk = getISOWeek(d);
+      const yr = d.getFullYear();
+      const label = `Settimana ${wk} / ${yr}`;
+      if (!byWeek[label]) byWeek[label] = { wk, yr, label, perArea: {} };
+      if (!byWeek[label].perArea[a.area]) byWeek[label].perArea[a.area] = [];
+      byWeek[label].perArea[a.area].push(a.score);
+    });
+    Object.values(byWeek).forEach((wd) => {
+      Object.keys(wd.perArea).forEach((area) => {
+        const arr = wd.perArea[area];
+        wd.perArea[area] = +(arr.reduce((s, v) => s + v, 0) / arr.length).toFixed(2);
+      });
+    });
+    return byWeek;
+  }, [userAudits]);
+
+  // Latest available week (mock + user)
+  const latestUserWeekLabel = useMemo(() => {
+    const arr = Object.values(userWeekData);
+    if (arr.length === 0) return null;
+    arr.sort((a, b) => (b.yr - a.yr) || (b.wk - a.wk));
+    return arr[0].label;
+  }, [userWeekData]);
+
+  // Auto-jump to the latest week whenever the user adds an audit in a new week
+  useEffect(() => {
+    if (latestUserWeekLabel) {
+      setSelectedWeek(latestUserWeekLabel);
+    }
+  }, [latestUserWeekLabel]);
+
+  // Combined sorted weeks list for the dropdown (desc)
+  const allWeeks = useMemo(() => {
+    const set = new Set(WEEKS);
+    Object.keys(userWeekData).forEach((k) => set.add(k));
+    return Array.from(set).sort((a, b) => {
+      const aWk = parseInt(a.match(/\d+/)[0], 10);
+      const aYr = parseInt(a.match(/\/\s*(\d+)/)[1], 10);
+      const bWk = parseInt(b.match(/\d+/)[0], 10);
+      const bYr = parseInt(b.match(/\/\s*(\d+)/)[1], 10);
+      return (bYr - aYr) || (bWk - aWk);
+    });
+  }, [userWeekData]);
+
   const weekData = useMemo(() => {
     const wk = selectedWeek.match(/\d+/)?.[0];
-    return WEEKLY_TREND.find((w) => w.week.includes(`S${wk}/`)) || WEEKLY_TREND[WEEKLY_TREND.length - 1];
-  }, [selectedWeek]);
+    const mock = WEEKLY_TREND.find((w) => w.week.includes(`S${wk}/`));
+    const userOverride = userWeekData[selectedWeek];
+    if (mock) {
+      // Merge in user averages (override mock values where present)
+      if (userOverride) {
+        const merged = { ...mock };
+        Object.entries(userOverride.perArea).forEach(([area, val]) => { merged[area] = val; });
+        return merged;
+      }
+      return mock;
+    }
+    // Brand-new week (only user data) — show user values, others as undefined
+    const obj = { week: selectedWeek };
+    if (userOverride) {
+      Object.entries(userOverride.perArea).forEach(([area, val]) => { obj[area] = val; });
+    }
+    return obj;
+  }, [selectedWeek, userWeekData]);
 
   // monthly compare mock (always 2.95 for May, vary for others)
   const monthValue = (m) => {
@@ -255,7 +342,7 @@ export default function Dashboard() {
             <Select value={selectedWeek} onValueChange={setSelectedWeek}>
               <SelectTrigger className="w-[180px] h-9 text-xs"><SelectValue /></SelectTrigger>
               <SelectContent>
-                {WEEKS.slice().reverse().map((w) => (
+                {allWeeks.map((w) => (
                   <SelectItem key={w} value={w}>{w}</SelectItem>
                 ))}
               </SelectContent>
@@ -328,7 +415,7 @@ export default function Dashboard() {
             </Select>
             <Select value={compareWeek} onValueChange={setCompareWeek}>
               <SelectTrigger className="h-10"><SelectValue placeholder="Settimana" /></SelectTrigger>
-              <SelectContent>{WEEKS.slice().reverse().map((w) => <SelectItem key={w} value={w}>{w}</SelectItem>)}</SelectContent>
+              <SelectContent>{allWeeks.map((w) => <SelectItem key={w} value={w}>{w}</SelectItem>)}</SelectContent>
             </Select>
           </div>
           <div className="mt-5">
