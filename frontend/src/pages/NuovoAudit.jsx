@@ -22,7 +22,7 @@ const ScoreButton = ({ value, selected, onClick, accent, isCritical }) => (
 );
 
 export default function NuovoAudit() {
-  const { addCriticita } = useAudit();
+  const { addCriticita, addAudit } = useAudit();
   const [mode, setMode] = useState('safety');
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
   const [area, setArea] = useState('');
@@ -88,8 +88,26 @@ export default function NuovoAudit() {
       addCriticita(mode, newCriticita);
     }
 
+    // Compute average score across all answered questions
+    const answeredScores = Object.values(scores);
+    const avgScore = answeredScores.length > 0
+      ? +(answeredScores.reduce((s, v) => s + v, 0) / answeredScores.length).toFixed(2)
+      : 0;
+    // Format date as "GG/MM/YYYY"
+    const [yyyy, mm, dd] = date.split('-');
+    const formattedDate = `${dd}/${mm}/${yyyy}`;
+    addAudit(mode, {
+      id: `user-${Date.now()}`,
+      type: mode === 'safety' ? 'Safety' : 'Quality',
+      area,
+      date: formattedDate,
+      inspector: ispettore,
+      score: avgScore,
+      criticita: newCriticita,
+    });
+
     toast.success('Audit salvato con successo', {
-      description: `${totalAnswered}/${totalQuestions} domande compilate per ${area}${newCriticita.length ? ` — ${newCriticita.length} criticità registrate` : ''}`,
+      description: `${totalAnswered}/${totalQuestions} domande compilate per ${area} — punteggio ${avgScore.toFixed(2)}${newCriticita.length ? ` — ${newCriticita.length} criticità` : ''}`,
     });
     resetForm();
   };

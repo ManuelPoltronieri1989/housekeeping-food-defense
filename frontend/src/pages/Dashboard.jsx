@@ -137,7 +137,7 @@ const CustomTooltip = ({ active, payload, label }) => {
 };
 
 export default function Dashboard() {
-  const { getCriticita } = useAudit();
+  const { getCriticita, getStats } = useAudit();
   const [mode, setMode] = useState('safety');
   const [selectedWeek, setSelectedWeek] = useState('Settimana 22 / 2026');
   const [monthA, setMonthA] = useState('Maggio 2026');
@@ -148,7 +148,7 @@ export default function Dashboard() {
   const [compareWeek, setCompareWeek] = useState('');
   const [compactReparti, setCompactReparti] = useState(false);
 
-  const stats = DASHBOARD_STATS[mode];
+  const stats = getStats(mode);
   const criticitaList = getCriticita(mode);
   const criticitaCount = criticitaList.length;
 

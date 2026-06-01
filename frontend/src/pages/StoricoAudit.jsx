@@ -2,6 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { Shield, Star, ChevronUp, ChevronDown, Eye, Pencil, Trash2, Search, X, Save, Building2, AlertTriangle, Check } from 'lucide-react';
 import { toast } from 'sonner';
 import { AUDIT_HISTORY, AUDIT_HISTORY_TOTAL, AREA_COLORS, AREA_ORDER, AREAS_REPARTI, SAFETY_QUESTIONS, QUALITY_QUESTIONS } from '../mock';
+import { useAudit } from '../context/AuditContext';
 import { Input } from '../components/ui/input';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription
@@ -216,6 +217,7 @@ const fromInputDate = (it) => {
 };
 
 export default function StoricoAudit() {
+  const { userAudits, updateAudit, removeAudit } = useAudit();
   const [history, setHistory] = useState(AUDIT_HISTORY);
   const [search, setSearch] = useState('');
   const [filterType, setFilterType] = useState('all');
@@ -230,6 +232,28 @@ export default function StoricoAudit() {
   const [fDate, setFDate] = useState('');
   const [fInspector, setFInspector] = useState('');
   const [fScore, setFScore] = useState('');
+
+  const isUserAudit = (a) => typeof a?.id === 'string' && a.id.startsWith('user-');
+
+  // Merge user audits (from context) with mock history into the latest week
+  const allHistory = useMemo(() => {
+    const userList = [...userAudits.safety, ...userAudits.quality];
+    if (userList.length === 0 || history.length === 0) return history;
+    const [latest, ...rest] = history;
+    const mergedAudits = [...userList, ...latest.audits];
+    const avg = mergedAudits.length
+      ? +(mergedAudits.reduce((s, a) => s + a.score, 0) / mergedAudits.length).toFixed(2)
+      : 0;
+    return [
+      { ...latest, audits: mergedAudits, count: mergedAudits.length, avg },
+      ...rest,
+    ];
+  }, [history, userAudits]);
+
+  const totalAuditsCount = useMemo(
+    () => allHistory.reduce((s, g) => s + g.audits.length, 0),
+    [allHistory]
+  );
 
   const openEdit = (audit) => {
     setEditing(audit);
@@ -258,17 +282,28 @@ export default function StoricoAudit() {
       inspector: fInspector,
       score: +scoreNum.toFixed(2),
     };
-    setHistory((prev) => prev.map((g) => {
-      const audits = g.audits.map((a) => (a.id === editing.id ? updated : a));
-      const avg = audits.length ? +(audits.reduce((s, a) => s + a.score, 0) / audits.length).toFixed(2) : 0;
-      return { ...g, audits, avg };
-    }));
+    if (isUserAudit(editing)) {
+      const oldMode = editing.type === 'Safety' ? 'safety' : 'quality';
+      const newMode = fType === 'Safety' ? 'safety' : 'quality';
+      if (oldMode !== newMode) {
+        removeAudit(oldMode, editing.id);
+        updateAudit(newMode, editing.id, updated);
+      } else {
+        updateAudit(newMode, editing.id, updated);
+      }
+    } else {
+      setHistory((prev) => prev.map((g) => {
+        const audits = g.audits.map((a) => (a.id === editing.id ? updated : a));
+        const avg = audits.length ? +(audits.reduce((s, a) => s + a.score, 0) / audits.length).toFixed(2) : 0;
+        return { ...g, audits, avg };
+      }));
+    }
     toast.success('Audit aggiornato', { description: `${updated.area} — punteggio ${updated.score.toFixed(2)}` });
     setEditing(null);
   };
 
   const filtered = useMemo(() => {
-    return history.map((g) => ({
+    return allHistory.map((g) => ({
       ...g,
       audits: g.audits.filter((a) => {
         if (filterType !== 'all' && a.type !== filterType) return false;
@@ -280,17 +315,22 @@ export default function StoricoAudit() {
         return true;
       }),
     })).filter((g) => g.audits.length > 0);
-  }, [history, search, filterType, filterArea]);
+  }, [allHistory, search, filterType, filterArea]);
 
   const total = filtered.reduce((s, g) => s + g.audits.length, 0);
 
   const onDelete = (audit) => setDeleting(audit);
   const confirmDelete = () => {
-    setHistory((prev) => prev.map((g) => {
-      const audits = g.audits.filter((a) => a.id !== deleting.id);
-      const avg = audits.length ? +(audits.reduce((s, a) => s + a.score, 0) / audits.length).toFixed(2) : 0;
-      return { ...g, audits, count: audits.length, avg };
-    }).filter((g) => g.audits.length > 0));
+    if (isUserAudit(deleting)) {
+      const mode = deleting.type === 'Safety' ? 'safety' : 'quality';
+      removeAudit(mode, deleting.id);
+    } else {
+      setHistory((prev) => prev.map((g) => {
+        const audits = g.audits.filter((a) => a.id !== deleting.id);
+        const avg = audits.length ? +(audits.reduce((s, a) => s + a.score, 0) / audits.length).toFixed(2) : 0;
+        return { ...g, audits, count: audits.length, avg };
+      }).filter((g) => g.audits.length > 0));
+    }
     toast.success('Audit eliminato');
     setDeleting(null);
   };
@@ -302,7 +342,7 @@ export default function StoricoAudit() {
     <div className="space-y-6">
       <div>
         <h1 className="text-[28px] font-bold text-gray-900 tracking-tight">Storico Audit</h1>
-        <p className="text-[13.5px] text-gray-500 mt-1">{AUDIT_HISTORY_TOTAL} audit completati — raggruppati per settimana</p>
+        <p className="text-[13.5px] text-gray-500 mt-1">{totalAuditsCount} audit completati — raggruppati per settimana</p>
       </div>
 
       {/* Filters */}
