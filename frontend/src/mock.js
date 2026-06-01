@@ -72,7 +72,7 @@ export const DASHBOARD_STATS = {
     criticita: 1,
     settimana: 'Sett. 22 / 2026',
     criticitaList: [
-      { area: 'Area Viola', reparto: 'Fine Linea', commento: 'Imballaggi danneggiati su pallet n.4, verificare lotto in entrata e isolare prodotto non conforme.', score: 2, inspector: 'Monica Abate', date: '29/05/2026', wk: 22, yr: 2026, type: 'Quality' },
+      { id: 'mock-q1', area: 'Area Viola', reparto: 'Fine Linea', commento: 'Imballaggi danneggiati su pallet n.4, verificare lotto in entrata e isolare prodotto non conforme.', score: 2, inspector: 'Monica Abate', date: '29/05/2026', wk: 22, yr: 2026, type: 'Quality' },
     ],
   }
 };

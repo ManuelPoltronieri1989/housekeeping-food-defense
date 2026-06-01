@@ -86,10 +86,11 @@ export default function NuovoAudit() {
     // Build criticities to push to dashboard context
     const newCriticita = Object.entries(scores)
       .filter(([_, v]) => v < threshold)
-      .map(([key, val]) => {
+      .map(([key, val], idx) => {
         const [sIdx, qid] = key.split('-');
         const sector = sectors[parseInt(sIdx, 10)];
         return {
+          id: `crit-${Date.now()}-${idx}`,
           area,
           reparto: sector,
           score: val,
