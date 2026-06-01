@@ -1,11 +1,12 @@
 import React from 'react';
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
-import { Shield, LayoutGrid, ClipboardCheck, MapPin, History, Settings } from 'lucide-react';
+import { Shield, LayoutGrid, ClipboardCheck, MapPin, History, Settings, AlertTriangle } from 'lucide-react';
 
 const NAV_ITEMS = [
   { to: '/', label: 'Dashboard', icon: LayoutGrid, end: true },
   { to: '/nuovo-audit', label: 'Nuovo Audit', icon: ClipboardCheck },
   { to: '/storico-audit', label: 'Storico Audit', icon: History },
+  { to: '/storico-segnalazioni', label: 'Storico Segnalazioni', icon: AlertTriangle },
   { to: '/configurazione', label: 'Configurazione', icon: Settings },
   { to: '/zone-calendario', label: 'Zone & Calendario', icon: MapPin },
 ];

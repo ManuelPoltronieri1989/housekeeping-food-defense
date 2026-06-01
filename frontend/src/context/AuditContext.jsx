@@ -48,6 +48,22 @@ export function AuditProvider({ children }) {
     return [...userCriticita[mode], ...base];
   }, [userCriticita]);
 
+  // Returns ALL criticities (mock + user), with normalized type & week info
+  const getAllCriticita = useCallback(() => {
+    const out = [];
+    ['safety', 'quality'].forEach((mode) => {
+      const baseList = DASHBOARD_STATS[mode]?.criticitaList || [];
+      const userList = userCriticita[mode];
+      [...userList, ...baseList].forEach((c) => {
+        out.push({
+          ...c,
+          type: c.type || (mode === 'safety' ? 'Safety' : 'Quality'),
+        });
+      });
+    });
+    return out;
+  }, [userCriticita]);
+
   // Aggregated dashboard stats: merge user audits with mock baseline
   const getStats = useCallback((mode) => {
     const base = DASHBOARD_STATS[mode];
@@ -75,9 +91,10 @@ export function AuditProvider({ children }) {
       updateAudit,
       removeAudit,
       getCriticita,
+      getAllCriticita,
       getStats,
     }),
-    [userCriticita, userAudits, addCriticita, addAudit, updateAudit, removeAudit, getCriticita, getStats]
+    [userCriticita, userAudits, addCriticita, addAudit, updateAudit, removeAudit, getCriticita, getAllCriticita, getStats]
   );
 
   return <AuditContext.Provider value={value}>{children}</AuditContext.Provider>;

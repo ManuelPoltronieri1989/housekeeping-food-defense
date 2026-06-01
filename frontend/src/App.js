@@ -7,6 +7,7 @@ import NuovoAudit from './pages/NuovoAudit';
 import ZoneCalendario from './pages/ZoneCalendario';
 import StoricoAudit from './pages/StoricoAudit';
 import Configurazione from './pages/Configurazione';
+import StoricoSegnalazioni from './pages/StoricoSegnalazioni';
 import { Toaster } from './components/ui/sonner';
 import { AuditProvider } from './context/AuditContext';
 
@@ -23,6 +24,7 @@ function App() {
               <Route path="/" element={<Dashboard />} />
               <Route path="/nuovo-audit" element={<NuovoAudit />} />
               <Route path="/storico-audit" element={<StoricoAudit />} />
+              <Route path="/storico-segnalazioni" element={<StoricoSegnalazioni />} />
               <Route path="/configurazione" element={<Configurazione />} />
               <Route path="/zone-calendario" element={<ZoneCalendario />} />
               <Route path="*" element={<Navigate to="/" replace />} />

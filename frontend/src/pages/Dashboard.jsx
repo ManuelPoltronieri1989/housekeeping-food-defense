@@ -158,7 +158,7 @@ const CustomTooltip = ({ active, payload, label }) => {
 };
 
 export default function Dashboard() {
-  const { getCriticita, getStats, userAudits } = useAudit();
+  const { getCriticita, getStats, userAudits, userCriticita } = useAudit();
   const [mode, setMode] = useState('safety');
   const [selectedWeek, setSelectedWeek] = useState('Settimana 22 / 2026');
   const [monthA, setMonthA] = useState('Maggio 2026');
@@ -170,8 +170,7 @@ export default function Dashboard() {
   const [compactReparti, setCompactReparti] = useState(false);
 
   const stats = getStats(mode);
-  const criticitaList = getCriticita(mode);
-  const criticitaCount = criticitaList.length;
+  // Dashboard counts ONLY user-added criticities for the latest week (mock ones live in Storico Segnalazioni)
 
   // Aggregate user audits by week+area
   const userWeekData = useMemo(() => {
@@ -209,6 +208,22 @@ export default function Dashboard() {
       setSelectedWeek(latestUserWeekLabel);
     }
   }, [latestUserWeekLabel]);
+
+  // Current "live" week: latest user week if any, otherwise week 22 baseline
+  const currentWeek = useMemo(() => {
+    if (latestUserWeekLabel) {
+      const m = latestUserWeekLabel.match(/(\d+).*?(\d{4})/);
+      return { wk: parseInt(m[1], 10), yr: parseInt(m[2], 10), label: latestUserWeekLabel };
+    }
+    return { wk: 22, yr: 2026, label: 'Settimana 22 / 2026' };
+  }, [latestUserWeekLabel]);
+
+  // Card criticità: only user-added in current week (mock ones live in Storico Segnalazioni)
+  const currentWeekCriticita = useMemo(() => {
+    const list = userCriticita[mode] || [];
+    return list.filter((c) => c.wk === currentWeek.wk && c.yr === currentWeek.yr);
+  }, [userCriticita, mode, currentWeek]);
+  const criticitaCount = currentWeekCriticita.length;
 
   // Combined sorted weeks list for the dropdown (desc)
   const allWeeks = useMemo(() => {
@@ -296,8 +311,8 @@ export default function Dashboard() {
         />
         <CriticitaCard
           count={criticitaCount}
-          sub={`${stats.settimana} — ${criticitaCount === 0 ? 'nessuna criticità' : criticitaCount === 1 ? '1 criticità rilevata' : `${criticitaCount} criticità rilevate`}`}
-          items={criticitaList}
+          sub={`Sett. ${currentWeek.wk} / ${currentWeek.yr} — ${criticitaCount === 0 ? 'nessuna criticità' : criticitaCount === 1 ? '1 criticità rilevata' : `${criticitaCount} criticità rilevate`}`}
+          items={currentWeekCriticita}
         />
       </div>
 

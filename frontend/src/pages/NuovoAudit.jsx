@@ -68,6 +68,21 @@ export default function NuovoAudit() {
       return;
     }
 
+    // Compute formatted date and ISO week from date input
+    const [yyyy, mm, dd] = date.split('-');
+    const formattedDate = `${dd}/${mm}/${yyyy}`;
+    const auditDate = new Date(parseInt(yyyy, 10), parseInt(mm, 10) - 1, parseInt(dd, 10));
+    // ISO week
+    const tgt = new Date(auditDate.valueOf());
+    const dayNr = (auditDate.getDay() + 6) % 7;
+    tgt.setDate(tgt.getDate() - dayNr + 3);
+    const firstThursday = tgt.valueOf();
+    tgt.setMonth(0, 1);
+    if (tgt.getDay() !== 4) tgt.setMonth(0, 1 + ((4 - tgt.getDay()) + 7) % 7);
+    const wk = 1 + Math.ceil((firstThursday - tgt) / 604800000);
+    const yr = parseInt(yyyy, 10);
+    const typeLabel = mode === 'safety' ? 'Safety' : 'Quality';
+
     // Build criticities to push to dashboard context
     const newCriticita = Object.entries(scores)
       .filter(([_, v]) => v < threshold)
@@ -80,7 +95,12 @@ export default function NuovoAudit() {
           score: val,
           commento: comments[key] || '',
           inspector: ispettore,
-          settimana: 'Sett. 22 / 2026',
+          date: formattedDate,
+          wk,
+          yr,
+          settimana: `Sett. ${wk} / ${yr}`,
+          type: typeLabel,
+          qid,
         };
       });
 
@@ -93,12 +113,9 @@ export default function NuovoAudit() {
     const avgScore = answeredScores.length > 0
       ? +(answeredScores.reduce((s, v) => s + v, 0) / answeredScores.length).toFixed(2)
       : 0;
-    // Format date as "GG/MM/YYYY"
-    const [yyyy, mm, dd] = date.split('-');
-    const formattedDate = `${dd}/${mm}/${yyyy}`;
     addAudit(mode, {
       id: `user-${Date.now()}`,
-      type: mode === 'safety' ? 'Safety' : 'Quality',
+      type: typeLabel,
       area,
       date: formattedDate,
       inspector: ispettore,
