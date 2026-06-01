@@ -15,6 +15,7 @@ import {
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue
 } from '../components/ui/select';
+import { useAudit } from '../context/AuditContext';
 
 const StatCard = ({ label, value, sub, Icon, iconBg, iconColor }) => (
   <div className="bg-white rounded-xl border border-gray-200/80 p-5 shadow-sm hover:shadow-md transition-shadow duration-200">
@@ -48,8 +49,8 @@ const CriticitaCard = ({ count, sub, items }) => {
         </div>
       </div>
       {isAlert && items && items.length > 0 && (
-        <div className="mt-3 pt-3 border-t border-red-200/70 space-y-2.5">
-          {items.map((it, i) => {
+        <div className="mt-3 pt-3 border-t border-red-200/70 space-y-2.5 max-h-[220px] overflow-y-auto pr-1">
+          {items.slice(0, 3).map((it, i) => {
             const c = AREA_COLORS[it.area];
             return (
               <div key={i} className="space-y-1.5">
@@ -63,6 +64,9 @@ const CriticitaCard = ({ count, sub, items }) => {
               </div>
             );
           })}
+          {items.length > 3 && (
+            <div className="text-[11px] font-semibold text-red-700 pt-1">+ {items.length - 3} altre criticità</div>
+          )}
         </div>
       )}
     </div>
@@ -133,6 +137,7 @@ const CustomTooltip = ({ active, payload, label }) => {
 };
 
 export default function Dashboard() {
+  const { getCriticita } = useAudit();
   const [mode, setMode] = useState('safety');
   const [selectedWeek, setSelectedWeek] = useState('Settimana 22 / 2026');
   const [monthA, setMonthA] = useState('Maggio 2026');
@@ -144,6 +149,8 @@ export default function Dashboard() {
   const [compactReparti, setCompactReparti] = useState(false);
 
   const stats = DASHBOARD_STATS[mode];
+  const criticitaList = getCriticita(mode);
+  const criticitaCount = criticitaList.length;
 
   const weekData = useMemo(() => {
     const wk = selectedWeek.match(/\d+/)?.[0];
@@ -201,9 +208,9 @@ export default function Dashboard() {
           Icon={TrendingUp} iconBg="bg-emerald-50" iconColor="text-emerald-600"
         />
         <CriticitaCard
-          count={stats.criticita}
-          sub={`${stats.settimana} — ${stats.criticita === 0 ? 'nessuna criticità' : stats.criticita === 1 ? '1 criticità rilevata' : `${stats.criticita} criticità rilevate`}`}
-          items={stats.criticitaList}
+          count={criticitaCount}
+          sub={`${stats.settimana} — ${criticitaCount === 0 ? 'nessuna criticità' : criticitaCount === 1 ? '1 criticità rilevata' : `${criticitaCount} criticità rilevate`}`}
+          items={criticitaList}
         />
       </div>
 
