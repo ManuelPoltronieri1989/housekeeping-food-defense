@@ -123,3 +123,93 @@ export const MONTHS = [
 ];
 
 export const WEEKS = Array.from({ length: 22 }, (_, i) => `Settimana ${i + 1} / 2026`);
+
+// Storico Audit data
+const INSPECTOR_POOL = ['Marco Ridolfo', 'Mario La Rocca', 'Marilisa Magetti', 'Monica Abate', 'Marco Monti', 'Francesco Ferrero', 'Franco Bianchi', 'Claudia Verdi', 'Ilaria Bruno'];
+const AUDIT_AREAS_FOR_HISTORY = ['Area Gialla', 'Area Celeste', 'Area Rossa', 'Area Viola', 'Area Blu', 'Area Verde', 'Area Grigia', 'Area Arancione'];
+
+function buildAuditHistory() {
+  const groups = [];
+  let id = 1;
+  for (let w = 22; w >= 14; w--) {
+    const audits = [];
+    const count = w === 22 ? 16 : 8 + ((w * 3) % 7);
+    for (let i = 0; i < count; i++) {
+      const area = AUDIT_AREAS_FOR_HISTORY[i % AUDIT_AREAS_FOR_HISTORY.length];
+      const type = i % 2 === 0 ? 'Safety' : 'Quality';
+      const dayOffset = i % 5;
+      const date = new Date(2026, 4, 29 - (22 - w) * 7 - dayOffset);
+      const score = type === 'Safety'
+        ? +(2.6 + Math.random() * 0.4).toFixed(2)
+        : +(4.3 + Math.random() * 0.7).toFixed(2);
+      audits.push({
+        id: id++,
+        type,
+        area,
+        date: date.toLocaleDateString('it-IT'),
+        inspector: INSPECTOR_POOL[(i + w) % INSPECTOR_POOL.length],
+        score,
+      });
+    }
+    const avg = +(audits.reduce((s, a) => s + a.score, 0) / audits.length).toFixed(2);
+    groups.push({ week: w, year: 2026, count: audits.length, avg, audits });
+  }
+  return groups;
+}
+
+export const AUDIT_HISTORY = buildAuditHistory();
+export const AUDIT_HISTORY_TOTAL = AUDIT_HISTORY.reduce((s, g) => s + g.count, 0);
+
+// Configurazione - domande dettagliate per Area + Reparto
+const baseSafetyTexts = [
+  'Dispositivi di sicurezza dei carrelli funzionanti (cicalino, lampeggiante, retro-luce LED SPOT)',
+  "Vie di circolazione pedoni, vie di esodo ed uscite di emergenza, presidi di emergenza (estintori, idranti, docce di emergenza, kit di emergenza, ecc.) non ostruire con materiali, attrezzature, mezzi, prodotto",
+  "Verifica stabilità stoccaggio prodotto finito",
+  "Autista del mezzo in posizione sicura e che abbia consegnato le chiavi del mezzo",
+  "Il KIT antiversamento si trova in corrispondenza dell'apposita segnaletica? È in condizione idonee?",
+  "Gestione elementi infrangibili: vetrate/finestre integre, assenza di rotture",
+];
+
+const baseQualityTexts = [
+  'Pulizia generale del reparto e dei macchinari',
+  'Corretto stoccaggio dei materiali secondo procedure FIFO/FEFO',
+  'Identificazione e tracciabilità dei lotti di produzione',
+  'Conformità delle procedure di sanitizzazione',
+  'Verifica integrità degli imballaggi e dei sigilli',
+];
+
+function buildConfigQuestions(type) {
+  const list = [];
+  let id = 1;
+  const prefix = type === 'Safety' ? 'S' : 'Q';
+  const texts = type === 'Safety' ? baseSafetyTexts : baseQualityTexts;
+  const areas = Object.keys(AREAS_REPARTI);
+  for (const a of areas) {
+    for (const r of AREAS_REPARTI[a]) {
+      texts.forEach((t, idx) => {
+        list.push({
+          id: id++,
+          code: `${prefix}${String(idx + 1).padStart(3, '0')}`,
+          text: t,
+          area: a,
+          reparto: r,
+          enabled: true,
+        });
+      });
+    }
+  }
+  return list;
+}
+
+export const SAFETY_CONFIG_QUESTIONS = buildConfigQuestions('Safety');
+export const QUALITY_CONFIG_QUESTIONS = buildConfigQuestions('Quality');
+
+// Storico Criticità mock
+export const CRITICITA_HISTORY = [
+  { id: 1, area: 'Area Rossa', reparto: 'Settore 2', date: '29/05/2026', inspector: 'Marilisa Magetti', question: 'Verifica stabilità stoccaggio prodotto finito', score: 1, severity: 'Alta', type: 'Safety' },
+  { id: 2, area: 'Area Gialla', reparto: 'Settore B', date: '22/05/2026', inspector: 'Marco Ridolfo', question: "Vie di circolazione pedoni non ostruite", score: 1, severity: 'Media', type: 'Safety' },
+  { id: 3, area: 'Area Viola', reparto: 'Fine Linea', date: '20/05/2026', inspector: 'Monica Abate', question: 'Pulizia generale del reparto', score: 2, severity: 'Media', type: 'Quality' },
+  { id: 4, area: 'Area Grigia', reparto: '110 Tettoia ricarica carrelli MAN', date: '15/05/2026', inspector: 'Claudia Verdi', question: 'Dispositivi di sicurezza dei carrelli funzionanti', score: 0, severity: 'Alta', type: 'Safety' },
+  { id: 5, area: 'Area Arancione', reparto: 'Settore 7', date: '12/05/2026', inspector: 'Mario La Rocca', question: 'Gestione elementi infrangibili', score: 1, severity: 'Media', type: 'Safety' },
+  { id: 6, area: 'Area Blu', reparto: 'Settore 4', date: '08/05/2026', inspector: 'Franco Bianchi', question: 'Corretto stoccaggio dei materiali FIFO/FEFO', score: 2, severity: 'Bassa', type: 'Quality' },
+];
