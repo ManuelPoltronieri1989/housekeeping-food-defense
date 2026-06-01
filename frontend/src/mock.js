@@ -63,6 +63,7 @@ export const DASHBOARD_STATS = {
     trend: 2.96,
     criticita: 0,
     settimana: 'Sett. 22 / 2026',
+    criticitaList: [],
   },
   quality: {
     punteggioMedio: 4.6,
@@ -70,6 +71,9 @@ export const DASHBOARD_STATS = {
     trend: 4.6,
     criticita: 1,
     settimana: 'Sett. 22 / 2026',
+    criticitaList: [
+      { area: 'Area Viola', reparto: 'Fine Linea', commento: 'Imballaggi danneggiati su pallet n.4, verificare lotto in entrata e isolare prodotto non conforme.', score: 2, inspector: 'Monica Abate' },
+    ],
   }
 };
 

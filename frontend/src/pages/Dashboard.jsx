@@ -31,6 +31,44 @@ const StatCard = ({ label, value, sub, Icon, iconBg, iconColor }) => (
   </div>
 );
 
+const CriticitaCard = ({ count, sub, items }) => {
+  const isAlert = count > 0;
+  return (
+    <div className={`rounded-xl border p-5 shadow-sm hover:shadow-md transition-shadow duration-200 ${
+      isAlert ? 'bg-red-50/40 border-red-200' : 'bg-white border-gray-200/80'
+    }`}>
+      <div className="flex items-start justify-between">
+        <div>
+          <div className={`text-[11px] font-semibold tracking-[0.12em] uppercase ${isAlert ? 'text-red-700' : 'text-gray-500'}`}>Criticità</div>
+          <div className={`text-[28px] font-bold mt-2 leading-none tracking-tight ${isAlert ? 'text-red-700' : 'text-gray-900'}`}>{count}</div>
+          <div className={`text-[12px] mt-2 ${isAlert ? 'text-red-700/80' : 'text-gray-500'}`}>{sub}</div>
+        </div>
+        <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${isAlert ? 'bg-red-100' : 'bg-emerald-50'}`}>
+          <AlertTriangle className={`w-5 h-5 ${isAlert ? 'text-red-600' : 'text-emerald-600'}`} strokeWidth={2} />
+        </div>
+      </div>
+      {isAlert && items && items.length > 0 && (
+        <div className="mt-3 pt-3 border-t border-red-200/70 space-y-2.5">
+          {items.map((it, i) => {
+            const c = AREA_COLORS[it.area];
+            return (
+              <div key={i} className="space-y-1.5">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="px-2 py-0.5 rounded-md text-[11px] font-semibold" style={{ background: c?.light, color: c?.text }}>{it.area}</span>
+                  <span className="text-[11px] text-gray-500">› {it.reparto}</span>
+                  <span className="ml-auto text-[11px] font-bold text-red-700 bg-red-100 px-2 py-0.5 rounded-full">{it.score}</span>
+                </div>
+                <div className="text-[12px] text-gray-700 leading-relaxed">{it.commento}</div>
+                {it.inspector && <div className="text-[10.5px] text-gray-500">— {it.inspector}</div>}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+};
+
 const AreaRow = ({ name, score }) => {
   const c = AREA_COLORS[name];
   return (
@@ -162,11 +200,10 @@ export default function Dashboard() {
           sub="Ultimo punteggio settimanale"
           Icon={TrendingUp} iconBg="bg-emerald-50" iconColor="text-emerald-600"
         />
-        <StatCard
-          label="Criticità"
-          value={stats.criticita}
-          sub={`${stats.settimana} — ${stats.criticita === 0 ? 'nessuna criticità' : `${stats.criticita} criticità`}`}
-          Icon={AlertTriangle} iconBg="bg-emerald-50" iconColor="text-emerald-600"
+        <CriticitaCard
+          count={stats.criticita}
+          sub={`${stats.settimana} — ${stats.criticita === 0 ? 'nessuna criticità' : stats.criticita === 1 ? '1 criticità rilevata' : `${stats.criticita} criticità rilevate`}`}
+          items={stats.criticitaList}
         />
       </div>
 
@@ -320,7 +357,7 @@ export default function Dashboard() {
         </div>
         <div>
           {AREA_ORDER.map((area) => (
-            <AreaAccordion key={area} name={area} data={REPARTI_SCORES[area]} defaultOpen={!compactReparti} />
+            <AreaAccordion key={`${area}-${compactReparti}`} name={area} data={REPARTI_SCORES[area]} defaultOpen={!compactReparti} />
           ))}
         </div>
       </div>
