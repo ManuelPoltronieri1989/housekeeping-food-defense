@@ -67,7 +67,7 @@ export const DASHBOARD_STATS = {
   },
   quality: {
     punteggioMedio: 4.6,
-    auditTotali: 68,
+    auditTotali: 72,
     trend: 4.6,
     criticita: 1,
     settimana: 'Sett. 22 / 2026',
