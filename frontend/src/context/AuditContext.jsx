@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useCallback, useMemo } from 'react';
+import React, { createContext, useContext, useState, useCallback, useMemo, useEffect } from 'react';
 import { DASHBOARD_STATS, AUDIT_HISTORY } from '../mock';
 
 const AuditContext = createContext(null);
@@ -9,15 +9,49 @@ export const useAudit = () => {
   return ctx;
 };
 
+// localStorage helpers (safe)
+const LS_KEY = 'hk_audit_state_v1';
+const loadState = () => {
+  try {
+    const raw = localStorage.getItem(LS_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    return {
+      userCriticita: parsed.userCriticita || { safety: [], quality: [] },
+      userAudits: parsed.userAudits || { safety: [], quality: [] },
+      dismissedIds: new Set(parsed.dismissedIds || []),
+      resolvedMap: parsed.resolvedMap || {},
+      auditHistory: parsed.auditHistory && Array.isArray(parsed.auditHistory) ? parsed.auditHistory : null,
+    };
+  } catch {
+    return null;
+  }
+};
+const saveState = (state) => {
+  try {
+    localStorage.setItem(LS_KEY, JSON.stringify({
+      userCriticita: state.userCriticita,
+      userAudits: state.userAudits,
+      dismissedIds: Array.from(state.dismissedIds),
+      resolvedMap: state.resolvedMap,
+      auditHistory: state.auditHistory,
+    }));
+  } catch {}
+};
+
 export function AuditProvider({ children }) {
-  const [userCriticita, setUserCriticita] = useState({ safety: [], quality: [] });
-  const [userAudits, setUserAudits] = useState({ safety: [], quality: [] });
-  // Persistent dismissed criticità ids (cestino)
-  const [dismissedIds, setDismissedIds] = useState(new Set());
-  // Map: critId -> { resolvedDate, resolvedBy }
-  const [resolvedMap, setResolvedMap] = useState({});
-  // Mutable copy of the mock audit history (so edits/deletes propagate to Dashboard)
-  const [auditHistory, setAuditHistory] = useState(AUDIT_HISTORY);
+  const initial = loadState();
+
+  const [userCriticita, setUserCriticita] = useState(initial?.userCriticita || { safety: [], quality: [] });
+  const [userAudits, setUserAudits] = useState(initial?.userAudits || { safety: [], quality: [] });
+  const [dismissedIds, setDismissedIds] = useState(initial?.dismissedIds || new Set());
+  const [resolvedMap, setResolvedMap] = useState(initial?.resolvedMap || {});
+  const [auditHistory, setAuditHistory] = useState(initial?.auditHistory || AUDIT_HISTORY);
+
+  // Persist on every change
+  useEffect(() => {
+    saveState({ userCriticita, userAudits, dismissedIds, resolvedMap, auditHistory });
+  }, [userCriticita, userAudits, dismissedIds, resolvedMap, auditHistory]);
 
   const updateMockAudit = useCallback((id, patch) => {
     setAuditHistory((prev) => prev.map((g) => {
@@ -36,10 +70,7 @@ export function AuditProvider({ children }) {
   }, []);
 
   const addCriticita = useCallback((mode, items) => {
-    setUserCriticita((prev) => ({
-      ...prev,
-      [mode]: [...items, ...prev[mode]],
-    }));
+    setUserCriticita((prev) => ({ ...prev, [mode]: [...items, ...prev[mode]] }));
   }, []);
 
   const dismissCriticita = useCallback((id) => {
@@ -80,7 +111,6 @@ export function AuditProvider({ children }) {
     }));
   }, []);
 
-  // Helper: enrich a criticità with resolved info
   const enrich = useCallback((c) => {
     const resolved = c.id ? resolvedMap[c.id] : null;
     return { ...c, resolved: !!resolved, resolvedDate: resolved?.resolvedDate, resolvedBy: resolved?.resolvedBy };
@@ -113,13 +143,11 @@ export function AuditProvider({ children }) {
     const base = DASHBOARD_STATS[mode];
     const targetType = mode === 'safety' ? 'Safety' : 'Quality';
 
-    // Real audits from mock history (mutable) for the selected mode
     const mockList = [];
     auditHistory.forEach((g) => g.audits.forEach((a) => { if (a.type === targetType) mockList.push(a); }));
     const mockCount = mockList.length;
     const mockSum = mockList.reduce((s, a) => s + (a.score || 0), 0);
 
-    // User-added audits
     const userList = userAudits[mode];
     const userCount = userList.length;
     const userSum = userList.reduce((s, a) => s + (a.score || 0), 0);
