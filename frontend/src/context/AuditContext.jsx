@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useCallback, useMemo } from 'react';
-import { DASHBOARD_STATS } from '../mock';
+import { DASHBOARD_STATS, AUDIT_HISTORY } from '../mock';
 
 const AuditContext = createContext(null);
 
@@ -16,6 +16,24 @@ export function AuditProvider({ children }) {
   const [dismissedIds, setDismissedIds] = useState(new Set());
   // Map: critId -> { resolvedDate, resolvedBy }
   const [resolvedMap, setResolvedMap] = useState({});
+  // Mutable copy of the mock audit history (so edits/deletes propagate to Dashboard)
+  const [auditHistory, setAuditHistory] = useState(AUDIT_HISTORY);
+
+  const updateMockAudit = useCallback((id, patch) => {
+    setAuditHistory((prev) => prev.map((g) => {
+      const audits = g.audits.map((a) => (a.id === id ? { ...a, ...patch } : a));
+      const avg = audits.length ? +(audits.reduce((s, a) => s + a.score, 0) / audits.length).toFixed(2) : 0;
+      return { ...g, audits, avg };
+    }));
+  }, []);
+
+  const removeMockAudit = useCallback((id) => {
+    setAuditHistory((prev) => prev.map((g) => {
+      const audits = g.audits.filter((a) => a.id !== id);
+      const avg = audits.length ? +(audits.reduce((s, a) => s + a.score, 0) / audits.length).toFixed(2) : 0;
+      return { ...g, audits, count: audits.length, avg };
+    }).filter((g) => g.audits.length > 0));
+  }, []);
 
   const addCriticita = useCallback((mode, items) => {
     setUserCriticita((prev) => ({
@@ -93,25 +111,35 @@ export function AuditProvider({ children }) {
 
   const getStats = useCallback((mode) => {
     const base = DASHBOARD_STATS[mode];
-    const list = userAudits[mode];
-    const userCount = list.length;
-    const total = base.auditTotali + userCount;
-    const sumBase = base.punteggioMedio * base.auditTotali;
-    const sumUser = list.reduce((s, a) => s + (a.score || 0), 0);
-    const avg = total > 0 ? (sumBase + sumUser) / total : base.punteggioMedio;
-    const trend = userCount > 0 ? list[0].score : base.trend;
+    const targetType = mode === 'safety' ? 'Safety' : 'Quality';
+
+    // Real audits from mock history (mutable) for the selected mode
+    const mockList = [];
+    auditHistory.forEach((g) => g.audits.forEach((a) => { if (a.type === targetType) mockList.push(a); }));
+    const mockCount = mockList.length;
+    const mockSum = mockList.reduce((s, a) => s + (a.score || 0), 0);
+
+    // User-added audits
+    const userList = userAudits[mode];
+    const userCount = userList.length;
+    const userSum = userList.reduce((s, a) => s + (a.score || 0), 0);
+
+    const total = mockCount + userCount;
+    const avg = total > 0 ? (mockSum + userSum) / total : base.punteggioMedio;
+    const trend = userCount > 0 ? userList[0].score : (mockList[0]?.score ?? base.trend);
     return {
       ...base,
       auditTotali: total,
       punteggioMedio: +avg.toFixed(2),
       trend: +trend.toFixed(2),
     };
-  }, [userAudits]);
+  }, [auditHistory, userAudits]);
 
   const value = useMemo(
     () => ({
       userCriticita,
       userAudits,
+      auditHistory,
       dismissedIds,
       resolvedMap,
       addCriticita,
@@ -121,11 +149,13 @@ export function AuditProvider({ children }) {
       addAudit,
       updateAudit,
       removeAudit,
+      updateMockAudit,
+      removeMockAudit,
       getCriticita,
       getAllCriticita,
       getStats,
     }),
-    [userCriticita, userAudits, dismissedIds, resolvedMap, addCriticita, dismissCriticita, resolveCriticita, unresolveCriticita, addAudit, updateAudit, removeAudit, getCriticita, getAllCriticita, getStats]
+    [userCriticita, userAudits, auditHistory, dismissedIds, resolvedMap, addCriticita, dismissCriticita, resolveCriticita, unresolveCriticita, addAudit, updateAudit, removeAudit, updateMockAudit, removeMockAudit, getCriticita, getAllCriticita, getStats]
   );
 
   return <AuditContext.Provider value={value}>{children}</AuditContext.Provider>;

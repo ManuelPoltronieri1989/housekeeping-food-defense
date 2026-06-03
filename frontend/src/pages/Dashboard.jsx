@@ -160,7 +160,7 @@ const CustomTooltip = ({ active, payload, label }) => {
 };
 
 export default function Dashboard() {
-  const { getCriticita, getStats, userAudits, userCriticita } = useAudit();
+  const { getCriticita, getStats, userAudits, userCriticita, auditHistory } = useAudit();
   const [mode, setMode] = useState('safety');
   const [selectedWeek, setSelectedWeek] = useState('Settimana 22 / 2026');
   const [monthA, setMonthA] = useState('');
@@ -179,7 +179,7 @@ export default function Dashboard() {
   const monthlyData = useMemo(() => {
     const targetType = mode === 'safety' ? 'Safety' : 'Quality';
     const all = [];
-    AUDIT_HISTORY.forEach((g) => {
+    auditHistory.forEach((g) => {
       g.audits.forEach((a) => { if (a.type === targetType) all.push(a); });
     });
     (userAudits[mode] || []).forEach((a) => all.push(a));
@@ -200,7 +200,7 @@ export default function Dashboard() {
     }));
     months.sort((a, b) => b.ordinal - a.ordinal);
     return months;
-  }, [mode, userAudits]);
+  }, [mode, userAudits, auditHistory]);
 
   const monthLabels = useMemo(() => monthlyData.map((m) => m.label), [monthlyData]);
   const monthMap = useMemo(() => {
@@ -213,7 +213,7 @@ export default function Dashboard() {
   const realWeeklyTrend = useMemo(() => {
     const targetType = mode === 'safety' ? 'Safety' : 'Quality';
     const all = [];
-    AUDIT_HISTORY.forEach((g) => {
+    auditHistory.forEach((g) => {
       g.audits.forEach((a) => {
         if (a.type === targetType) {
           all.push({ wk: g.week, yr: g.year, area: a.area, score: a.score });
@@ -249,7 +249,7 @@ export default function Dashboard() {
     });
     entries.sort((a, b) => (a.yr - b.yr) || (a.wkNum - b.wkNum));
     return entries;
-  }, [mode, userAudits]);
+  }, [mode, userAudits, auditHistory]);
 
   // Available week labels from real data (descending)
   const availableWeeks = useMemo(

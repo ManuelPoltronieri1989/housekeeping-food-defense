@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { Shield, Star, ChevronUp, ChevronDown, Eye, Pencil, Trash2, Search, X, Save, Building2, AlertTriangle, Check } from 'lucide-react';
 import { toast } from 'sonner';
-import { AUDIT_HISTORY, AUDIT_HISTORY_TOTAL, AREA_COLORS, AREA_ORDER, AREAS_REPARTI, SAFETY_QUESTIONS, QUALITY_QUESTIONS } from '../mock';
+import { AUDIT_HISTORY_TOTAL, AREA_COLORS, AREA_ORDER, AREAS_REPARTI, SAFETY_QUESTIONS, QUALITY_QUESTIONS } from '../mock';
 import { useAudit } from '../context/AuditContext';
 import { Input } from '../components/ui/input';
 import {
@@ -235,8 +235,7 @@ const fromInputDate = (it) => {
 };
 
 export default function StoricoAudit() {
-  const { userAudits, updateAudit, removeAudit } = useAudit();
-  const [history, setHistory] = useState(AUDIT_HISTORY);
+  const { userAudits, auditHistory, updateAudit, removeAudit, updateMockAudit, removeMockAudit } = useAudit();
   const [search, setSearch] = useState('');
   const [filterType, setFilterType] = useState('all');
   const [filterArea, setFilterArea] = useState('all');
@@ -256,7 +255,7 @@ export default function StoricoAudit() {
   // Merge user audits (from context) into the correct ISO week (existing or new)
   const allHistory = useMemo(() => {
     const userList = [...userAudits.safety, ...userAudits.quality];
-    if (userList.length === 0) return history;
+    if (userList.length === 0) return auditHistory;
 
     // Group user audits by ISO week
     const userByKey = {};
@@ -269,9 +268,9 @@ export default function StoricoAudit() {
       userByKey[key].audits.push(a);
     });
 
-    // Merge with mock history
+    // Merge with mock history (from context)
     const map = new Map();
-    history.forEach((g) => map.set(`${g.year}-${g.week}`, { ...g, audits: [...g.audits] }));
+    auditHistory.forEach((g) => map.set(`${g.year}-${g.week}`, { ...g, audits: [...g.audits] }));
     Object.entries(userByKey).forEach(([key, ug]) => {
       if (map.has(key)) {
         const existing = map.get(key);
@@ -290,7 +289,7 @@ export default function StoricoAudit() {
     });
     groups.sort((a, b) => (b.year - a.year) || (b.week - a.week));
     return groups;
-  }, [history, userAudits]);
+  }, [auditHistory, userAudits]);
 
   const totalAuditsCount = useMemo(
     () => allHistory.reduce((s, g) => s + g.audits.length, 0),
@@ -334,11 +333,7 @@ export default function StoricoAudit() {
         updateAudit(newMode, editing.id, updated);
       }
     } else {
-      setHistory((prev) => prev.map((g) => {
-        const audits = g.audits.map((a) => (a.id === editing.id ? updated : a));
-        const avg = audits.length ? +(audits.reduce((s, a) => s + a.score, 0) / audits.length).toFixed(2) : 0;
-        return { ...g, audits, avg };
-      }));
+      updateMockAudit(editing.id, updated);
     }
     toast.success('Audit aggiornato', { description: `${updated.area} — punteggio ${updated.score.toFixed(2)}` });
     setEditing(null);
@@ -367,11 +362,7 @@ export default function StoricoAudit() {
       const mode = deleting.type === 'Safety' ? 'safety' : 'quality';
       removeAudit(mode, deleting.id);
     } else {
-      setHistory((prev) => prev.map((g) => {
-        const audits = g.audits.filter((a) => a.id !== deleting.id);
-        const avg = audits.length ? +(audits.reduce((s, a) => s + a.score, 0) / audits.length).toFixed(2) : 0;
-        return { ...g, audits, count: audits.length, avg };
-      }).filter((g) => g.audits.length > 0));
+      removeMockAudit(deleting.id);
     }
     toast.success('Audit eliminato');
     setDeleting(null);
