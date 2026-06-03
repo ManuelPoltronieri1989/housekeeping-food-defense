@@ -10,12 +10,14 @@ import {
 import ModeToggle from '../components/ModeToggle';
 import {
   AREA_COLORS, REPARTI_SCORES, AREA_ORDER, MEDIA_PER_AREA_ORDER,
-  WEEKLY_TREND, DASHBOARD_STATS, MONTHS, WEEKS
+  WEEKLY_TREND, DASHBOARD_STATS, MONTHS, WEEKS, AUDIT_HISTORY
 } from '../mock';
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue
 } from '../components/ui/select';
 import { useAudit } from '../context/AuditContext';
+
+const ITALIAN_MONTHS = ['Gennaio', 'Febbraio', 'Marzo', 'Aprile', 'Maggio', 'Giugno', 'Luglio', 'Agosto', 'Settembre', 'Ottobre', 'Novembre', 'Dicembre'];
 
 // ISO week helpers
 const getISOWeek = (date) => {
@@ -161,8 +163,8 @@ export default function Dashboard() {
   const { getCriticita, getStats, userAudits, userCriticita } = useAudit();
   const [mode, setMode] = useState('safety');
   const [selectedWeek, setSelectedWeek] = useState('Settimana 22 / 2026');
-  const [monthA, setMonthA] = useState('Maggio 2026');
-  const [monthB, setMonthB] = useState('Maggio 2026');
+  const [monthA, setMonthA] = useState('');
+  const [monthB, setMonthB] = useState('');
   const [compareTab, setCompareTab] = useState('twoAreas');
   const [areaA, setAreaA] = useState('');
   const [areaB, setAreaB] = useState('');
@@ -171,6 +173,40 @@ export default function Dashboard() {
 
   const stats = getStats(mode);
   // Dashboard counts ONLY user-added criticities for the latest week (mock ones live in Storico Segnalazioni)
+
+  // Compute monthly averages from real audit history (mock + user), respecting current mode
+  const monthlyData = useMemo(() => {
+    const targetType = mode === 'safety' ? 'Safety' : 'Quality';
+    const all = [];
+    AUDIT_HISTORY.forEach((g) => {
+      g.audits.forEach((a) => { if (a.type === targetType) all.push(a); });
+    });
+    (userAudits[mode] || []).forEach((a) => all.push(a));
+
+    const byMonth = {};
+    all.forEach((a) => {
+      const d = parseItDate(a.date);
+      const label = `${ITALIAN_MONTHS[d.getMonth()]} ${d.getFullYear()}`;
+      if (!byMonth[label]) byMonth[label] = { sum: 0, count: 0, ordinal: d.getFullYear() * 12 + d.getMonth() };
+      byMonth[label].sum += a.score;
+      byMonth[label].count += 1;
+    });
+    const months = Object.entries(byMonth).map(([k, v]) => ({
+      label: k,
+      avg: +(v.sum / v.count).toFixed(2),
+      ordinal: v.ordinal,
+      count: v.count,
+    }));
+    months.sort((a, b) => b.ordinal - a.ordinal);
+    return months;
+  }, [mode, userAudits]);
+
+  const monthLabels = useMemo(() => monthlyData.map((m) => m.label), [monthlyData]);
+  const monthMap = useMemo(() => {
+    const m = {};
+    monthlyData.forEach((x) => { m[x.label] = x; });
+    return m;
+  }, [monthlyData]);
 
   // Aggregate user audits by week+area
   const userWeekData = useMemo(() => {
@@ -259,15 +295,22 @@ export default function Dashboard() {
     return obj;
   }, [selectedWeek, userWeekData]);
 
-  // monthly compare mock (always 2.95 for May, vary for others)
-  const monthValue = (m) => {
-    const idx = MONTHS.indexOf(m);
-    const vals = [2.80, 2.85, 2.88, 2.92, 2.95, 2.96, 2.94, 2.90, 2.93, 2.91, 2.89, 2.87];
-    return vals[idx] ?? 2.95;
-  };
-  const valA = monthValue(monthA);
-  const valB = monthValue(monthB);
-  const diff = valB - valA;
+  // Auto-pick defaults for month comparison based on available months
+  useEffect(() => {
+    if (monthLabels.length === 0) return;
+    if (!monthA || !monthLabels.includes(monthA)) {
+      setMonthA(monthLabels[Math.min(1, monthLabels.length - 1)]); // older month
+    }
+    if (!monthB || !monthLabels.includes(monthB)) {
+      setMonthB(monthLabels[0]); // most recent month
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [monthLabels]);
+
+  const valA = monthMap[monthA]?.avg ?? null;
+  const valB = monthMap[monthB]?.avg ?? null;
+  const hasBoth = valA !== null && valB !== null;
+  const diff = hasBoth ? valB - valA : 0;
 
   const weekValues = (areaName, weekLabel) => {
     if (!areaName || !weekLabel) return null;
@@ -376,38 +419,48 @@ export default function Dashboard() {
         {/* Monthly */}
         <div className="bg-white rounded-xl border border-gray-200/80 p-5 shadow-sm">
           <h3 className="font-semibold text-gray-900 mb-4 text-[15px]">Confronto Mensile — Media Generale</h3>
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="text-xs text-gray-500 font-medium">Mese A</label>
-              <Select value={monthA} onValueChange={setMonthA}>
-                <SelectTrigger className="w-full h-10 mt-1.5"><SelectValue /></SelectTrigger>
-                <SelectContent>{MONTHS.map((m) => <SelectItem key={m} value={m}>{m}</SelectItem>)}</SelectContent>
-              </Select>
-            </div>
-            <div>
-              <label className="text-xs text-gray-500 font-medium">Mese B</label>
-              <Select value={monthB} onValueChange={setMonthB}>
-                <SelectTrigger className="w-full h-10 mt-1.5"><SelectValue /></SelectTrigger>
-                <SelectContent>{MONTHS.map((m) => <SelectItem key={m} value={m}>{m}</SelectItem>)}</SelectContent>
-              </Select>
-            </div>
-          </div>
-          <div className="grid grid-cols-2 gap-4 mt-4">
-            <div className="bg-gray-50 rounded-lg p-4 text-center border border-gray-100">
-              <div className="text-xs text-gray-500">{monthA}</div>
-              <div className="text-3xl font-bold text-gray-800 mt-1">{valA.toFixed(2)}</div>
-            </div>
-            <div className="bg-emerald-50 rounded-lg p-4 text-center border border-emerald-100">
-              <div className="text-xs text-emerald-700">{monthB}</div>
-              <div className="text-3xl font-bold text-emerald-700 mt-1">{valB.toFixed(2)}</div>
-            </div>
-          </div>
-          <div className={`mt-4 flex items-center justify-center gap-2 rounded-lg py-2.5 text-sm font-medium ${
-            diff > 0 ? 'bg-emerald-50 text-emerald-700' : diff < 0 ? 'bg-red-50 text-red-700' : 'bg-gray-50 text-gray-600'
-          }`}>
-            {diff > 0 ? <ArrowUp className="w-4 h-4" /> : diff < 0 ? <ArrowDown className="w-4 h-4" /> : <Minus className="w-4 h-4" />}
-            <span>{Math.abs(diff).toFixed(2)} rispetto al mese A</span>
-          </div>
+          {monthLabels.length === 0 ? (
+            <div className="py-10 text-center text-sm text-gray-400">Nessun audit registrato per la modalità selezionata</div>
+          ) : (
+            <>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-xs text-gray-500 font-medium">Mese A</label>
+                  <Select value={monthA} onValueChange={setMonthA}>
+                    <SelectTrigger className="w-full h-10 mt-1.5"><SelectValue placeholder="Seleziona mese" /></SelectTrigger>
+                    <SelectContent>{monthLabels.map((m) => <SelectItem key={m} value={m}>{m}</SelectItem>)}</SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <label className="text-xs text-gray-500 font-medium">Mese B</label>
+                  <Select value={monthB} onValueChange={setMonthB}>
+                    <SelectTrigger className="w-full h-10 mt-1.5"><SelectValue placeholder="Seleziona mese" /></SelectTrigger>
+                    <SelectContent>{monthLabels.map((m) => <SelectItem key={m} value={m}>{m}</SelectItem>)}</SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4 mt-4">
+                <div className="bg-gray-50 rounded-lg p-4 text-center border border-gray-100">
+                  <div className="text-xs text-gray-500">{monthA || '—'}</div>
+                  <div className="text-3xl font-bold text-gray-800 mt-1">{valA !== null ? valA.toFixed(2) : '—'}</div>
+                  {monthMap[monthA] && <div className="text-[11px] text-gray-500 mt-1">{monthMap[monthA].count} audit</div>}
+                </div>
+                <div className="bg-emerald-50 rounded-lg p-4 text-center border border-emerald-100">
+                  <div className="text-xs text-emerald-700">{monthB || '—'}</div>
+                  <div className="text-3xl font-bold text-emerald-700 mt-1">{valB !== null ? valB.toFixed(2) : '—'}</div>
+                  {monthMap[monthB] && <div className="text-[11px] text-emerald-700/70 mt-1">{monthMap[monthB].count} audit</div>}
+                </div>
+              </div>
+              {hasBoth && (
+                <div className={`mt-4 flex items-center justify-center gap-2 rounded-lg py-2.5 text-sm font-medium ${
+                  diff > 0 ? 'bg-emerald-50 text-emerald-700' : diff < 0 ? 'bg-red-50 text-red-700' : 'bg-gray-50 text-gray-600'
+                }`}>
+                  {diff > 0 ? <ArrowUp className="w-4 h-4" /> : diff < 0 ? <ArrowDown className="w-4 h-4" /> : <Minus className="w-4 h-4" />}
+                  <span>{Math.abs(diff).toFixed(2)} rispetto al mese A</span>
+                </div>
+              )}
+            </>
+          )}
         </div>
 
         {/* Weekly comparison */}
