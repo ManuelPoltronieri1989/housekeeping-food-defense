@@ -169,6 +169,7 @@ export default function Dashboard() {
   const [areaA, setAreaA] = useState('');
   const [areaB, setAreaB] = useState('');
   const [compareWeek, setCompareWeek] = useState('');
+  const [compareWeek2, setCompareWeek2] = useState('');
   const [compactReparti, setCompactReparti] = useState(false);
 
   const stats = getStats(mode);
@@ -314,8 +315,30 @@ export default function Dashboard() {
     const data = weekDataByLabel[weekLabel];
     return data && data[areaName] !== undefined ? data[areaName] : null;
   };
-  const compareA = compareTab === 'twoAreas' ? weekValues(areaA, compareWeek) : weekValues(areaA, compareWeek);
-  const compareB = weekValues(areaB, compareWeek);
+  // Confronto per Settimana — two modes:
+  //  • twoAreas: two areas in the SAME week        → areaA vs areaB @ compareWeek
+  //  • twoWeeks: SAME area in two different weeks  → areaA @ compareWeek vs areaA @ compareWeek2
+  let compareA = null;
+  let compareB = null;
+  let labelA = '';
+  let labelB = '';
+  if (compareTab === 'twoAreas') {
+    compareA = weekValues(areaA, compareWeek);
+    compareB = weekValues(areaB, compareWeek);
+    labelA = areaA;
+    labelB = areaB;
+  } else {
+    compareA = weekValues(areaA, compareWeek);
+    compareB = weekValues(areaA, compareWeek2);
+    labelA = compareWeek;
+    labelB = compareWeek2;
+  }
+  const compareColors = compareTab === 'twoAreas'
+    ? { A: AREA_COLORS[areaA], B: AREA_COLORS[areaB] }
+    : { A: AREA_COLORS[areaA], B: AREA_COLORS[areaA] };
+  const compareReady = compareTab === 'twoAreas'
+    ? !!(areaA && areaB && compareWeek)
+    : !!(areaA && compareWeek && compareWeek2);
 
   return (
     <div className="space-y-6">
@@ -469,31 +492,60 @@ export default function Dashboard() {
             </div>
           </div>
           <div className="grid grid-cols-3 gap-3">
-            <Select value={areaA} onValueChange={setAreaA}>
-              <SelectTrigger className="h-10"><SelectValue placeholder="Area A" /></SelectTrigger>
-              <SelectContent>{AREA_ORDER.map((a) => <SelectItem key={a} value={a}>{a}</SelectItem>)}</SelectContent>
-            </Select>
-            <Select value={areaB} onValueChange={setAreaB}>
-              <SelectTrigger className="h-10"><SelectValue placeholder="Area B" /></SelectTrigger>
-              <SelectContent>{AREA_ORDER.map((a) => <SelectItem key={a} value={a}>{a}</SelectItem>)}</SelectContent>
-            </Select>
-            <Select value={compareWeek} onValueChange={setCompareWeek}>
-              <SelectTrigger className="h-10"><SelectValue placeholder="Settimana" /></SelectTrigger>
-              <SelectContent>{availableWeeks.map((w) => <SelectItem key={w} value={w}>{w}</SelectItem>)}</SelectContent>
-            </Select>
+            {compareTab === 'twoAreas' ? (
+              <>
+                <Select value={areaA} onValueChange={setAreaA}>
+                  <SelectTrigger className="h-10"><SelectValue placeholder="Area A" /></SelectTrigger>
+                  <SelectContent>{AREA_ORDER.map((a) => <SelectItem key={a} value={a}>{a}</SelectItem>)}</SelectContent>
+                </Select>
+                <Select value={areaB} onValueChange={setAreaB}>
+                  <SelectTrigger className="h-10"><SelectValue placeholder="Area B" /></SelectTrigger>
+                  <SelectContent>{AREA_ORDER.map((a) => <SelectItem key={a} value={a}>{a}</SelectItem>)}</SelectContent>
+                </Select>
+                <Select value={compareWeek} onValueChange={setCompareWeek}>
+                  <SelectTrigger className="h-10"><SelectValue placeholder="Settimana" /></SelectTrigger>
+                  <SelectContent>{availableWeeks.map((w) => <SelectItem key={w} value={w}>{w}</SelectItem>)}</SelectContent>
+                </Select>
+              </>
+            ) : (
+              <>
+                <Select value={areaA} onValueChange={setAreaA}>
+                  <SelectTrigger className="h-10"><SelectValue placeholder="Seleziona area" /></SelectTrigger>
+                  <SelectContent>{AREA_ORDER.map((a) => <SelectItem key={a} value={a}>{a}</SelectItem>)}</SelectContent>
+                </Select>
+                <Select value={compareWeek} onValueChange={setCompareWeek}>
+                  <SelectTrigger className="h-10"><SelectValue placeholder="Settimana 1" /></SelectTrigger>
+                  <SelectContent>{availableWeeks.map((w) => <SelectItem key={w} value={w}>{w}</SelectItem>)}</SelectContent>
+                </Select>
+                <Select value={compareWeek2} onValueChange={setCompareWeek2}>
+                  <SelectTrigger className="h-10"><SelectValue placeholder="Settimana 2" /></SelectTrigger>
+                  <SelectContent>{availableWeeks.map((w) => <SelectItem key={w} value={w}>{w}</SelectItem>)}</SelectContent>
+                </Select>
+              </>
+            )}
           </div>
           <div className="mt-5">
-            {!areaA || !areaB || !compareWeek ? (
-              <div className="text-center text-sm text-gray-400 py-10">Seleziona due aree e una settimana</div>
+            {!compareReady ? (
+              <div className="text-center text-sm text-gray-400 py-10">
+                {compareTab === 'twoAreas' ? 'Seleziona due aree e una settimana' : "Seleziona un'area e due settimane"}
+              </div>
             ) : (
               <div className="grid grid-cols-2 gap-3">
-                <div className="rounded-lg p-4 border" style={{ backgroundColor: AREA_COLORS[areaA].light, borderColor: AREA_COLORS[areaA].bg }}>
-                  <div className="text-xs font-semibold" style={{ color: AREA_COLORS[areaA].text }}>{areaA}</div>
-                  <div className="text-3xl font-bold mt-1" style={{ color: AREA_COLORS[areaA].text }}>{compareA?.toFixed(2)}</div>
+                <div className="rounded-lg p-4 border" style={{ backgroundColor: compareColors.A?.light, borderColor: compareColors.A?.bg }}>
+                  <div className="text-xs font-semibold" style={{ color: compareColors.A?.text }}>
+                    {compareTab === 'twoAreas' ? labelA : `${areaA} · ${labelA}`}
+                  </div>
+                  <div className="text-3xl font-bold mt-1" style={{ color: compareColors.A?.text }}>
+                    {compareA !== null && compareA !== undefined ? compareA.toFixed(2) : '—'}
+                  </div>
                 </div>
-                <div className="rounded-lg p-4 border" style={{ backgroundColor: AREA_COLORS[areaB].light, borderColor: AREA_COLORS[areaB].bg }}>
-                  <div className="text-xs font-semibold" style={{ color: AREA_COLORS[areaB].text }}>{areaB}</div>
-                  <div className="text-3xl font-bold mt-1" style={{ color: AREA_COLORS[areaB].text }}>{compareB?.toFixed(2)}</div>
+                <div className="rounded-lg p-4 border" style={{ backgroundColor: compareColors.B?.light, borderColor: compareColors.B?.bg }}>
+                  <div className="text-xs font-semibold" style={{ color: compareColors.B?.text }}>
+                    {compareTab === 'twoAreas' ? labelB : `${areaA} · ${labelB}`}
+                  </div>
+                  <div className="text-3xl font-bold mt-1" style={{ color: compareColors.B?.text }}>
+                    {compareB !== null && compareB !== undefined ? compareB.toFixed(2) : '—'}
+                  </div>
                 </div>
               </div>
             )}
