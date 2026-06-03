@@ -132,28 +132,61 @@ export const WEEKS = Array.from({ length: 22 }, (_, i) => `Settimana ${i + 1} / 
 const INSPECTOR_POOL = ['Marco Ridolfo', 'Mario La Rocca', 'Marilisa Magetti', 'Monica Abate', 'Marco Monti', 'Francesco Ferrero', 'Franco Bianchi', 'Claudia Verdi', 'Ilaria Bruno'];
 const AUDIT_AREAS_FOR_HISTORY = ['Area Gialla', 'Area Celeste', 'Area Rossa', 'Area Viola', 'Area Blu', 'Area Verde', 'Area Grigia', 'Area Arancione'];
 
+// Ispettore assegnato per area (da Zone & Calendario)
+export const AREA_INSPECTOR = {
+  'Area Gialla': 'Francesco F.',
+  'Area Verde': 'Monica',
+  'Area Viola': 'Marilisa',
+  'Area Rossa': 'Marco M.',
+  'Area Blu': 'Franco',
+  'Area Arancione': 'Mario',
+  'Area Celeste': 'Ilaria',
+  'Area Grigia': 'Claudia',
+};
+
+// Target settimanale per area (Safety, 0–3) — coerente con il grafico dell'originale
+const SAFETY_TARGETS = {
+  14: { 'Area Arancione': 2.80, 'Area Blu': 2.95, 'Area Celeste': 3.00, 'Area Gialla': 2.90, 'Area Grigia': 2.85, 'Area Rossa': 2.85, 'Area Verde': 3.00, 'Area Viola': 2.90 },
+  15: { 'Area Arancione': 2.50, 'Area Blu': 3.00, 'Area Celeste': 3.00, 'Area Gialla': 2.90, 'Area Grigia': 2.80, 'Area Rossa': 2.55, 'Area Verde': 3.00, 'Area Viola': 2.85 },
+  16: { 'Area Arancione': 2.85, 'Area Blu': 3.00, 'Area Celeste': 3.00, 'Area Gialla': 2.95, 'Area Grigia': 2.92, 'Area Rossa': 2.90, 'Area Verde': 3.00, 'Area Viola': 2.95 },
+  17: { 'Area Arancione': 2.60, 'Area Blu': 3.00, 'Area Celeste': 3.00, 'Area Gialla': 2.92, 'Area Grigia': 2.85, 'Area Rossa': 2.70, 'Area Verde': 3.00, 'Area Viola': 2.90 },
+  18: { 'Area Arancione': 2.85, 'Area Blu': 2.95, 'Area Celeste': 3.00, 'Area Gialla': 2.95, 'Area Grigia': 2.85, 'Area Rossa': 2.80, 'Area Verde': 3.00, 'Area Viola': 2.92 },
+  19: { 'Area Arancione': 2.92, 'Area Blu': 3.00, 'Area Celeste': 3.00, 'Area Gialla': 2.96, 'Area Grigia': 2.92, 'Area Rossa': 2.95, 'Area Verde': 3.00, 'Area Viola': 2.95 },
+  20: { 'Area Arancione': 2.88, 'Area Blu': 2.95, 'Area Celeste': 3.00, 'Area Gialla': 2.94, 'Area Grigia': 2.95, 'Area Rossa': 2.92, 'Area Verde': 3.00, 'Area Viola': 2.92 },
+  21: { 'Area Arancione': 2.92, 'Area Blu': 3.00, 'Area Celeste': 3.00, 'Area Gialla': 2.96, 'Area Grigia': 2.94, 'Area Rossa': 2.95, 'Area Verde': 3.00, 'Area Viola': 2.95 },
+  22: { 'Area Arancione': 2.90, 'Area Blu': 3.00, 'Area Celeste': 3.00, 'Area Gialla': 2.96, 'Area Grigia': 2.94, 'Area Rossa': 2.90, 'Area Verde': 3.00, 'Area Viola': 2.95 },
+};
+
+// Target settimanale per area (Quality, 1–5)
+const QUALITY_TARGETS = {
+  14: { 'Area Arancione': 4.40, 'Area Blu': 4.65, 'Area Celeste': 4.80, 'Area Gialla': 4.55, 'Area Grigia': 4.35, 'Area Rossa': 4.40, 'Area Verde': 4.80, 'Area Viola': 4.50 },
+  15: { 'Area Arancione': 4.20, 'Area Blu': 4.70, 'Area Celeste': 4.80, 'Area Gialla': 4.60, 'Area Grigia': 4.45, 'Area Rossa': 4.20, 'Area Verde': 4.80, 'Area Viola': 4.45 },
+  16: { 'Area Arancione': 4.55, 'Area Blu': 4.75, 'Area Celeste': 4.85, 'Area Gialla': 4.65, 'Area Grigia': 4.55, 'Area Rossa': 4.55, 'Area Verde': 4.85, 'Area Viola': 4.60 },
+  17: { 'Area Arancione': 4.35, 'Area Blu': 4.65, 'Area Celeste': 4.80, 'Area Gialla': 4.60, 'Area Grigia': 4.50, 'Area Rossa': 4.30, 'Area Verde': 4.80, 'Area Viola': 4.55 },
+  18: { 'Area Arancione': 4.50, 'Area Blu': 4.60, 'Area Celeste': 4.80, 'Area Gialla': 4.65, 'Area Grigia': 4.50, 'Area Rossa': 4.50, 'Area Verde': 4.80, 'Area Viola': 4.55 },
+  19: { 'Area Arancione': 4.60, 'Area Blu': 4.75, 'Area Celeste': 4.85, 'Area Gialla': 4.70, 'Area Grigia': 4.60, 'Area Rossa': 4.60, 'Area Verde': 4.85, 'Area Viola': 4.65 },
+  20: { 'Area Arancione': 4.55, 'Area Blu': 4.65, 'Area Celeste': 4.80, 'Area Gialla': 4.65, 'Area Grigia': 4.65, 'Area Rossa': 4.60, 'Area Verde': 4.85, 'Area Viola': 4.60 },
+  21: { 'Area Arancione': 4.60, 'Area Blu': 4.75, 'Area Celeste': 4.85, 'Area Gialla': 4.70, 'Area Grigia': 4.65, 'Area Rossa': 4.65, 'Area Verde': 4.85, 'Area Viola': 4.65 },
+  22: { 'Area Arancione': 4.55, 'Area Blu': 4.75, 'Area Celeste': 4.85, 'Area Gialla': 4.70, 'Area Grigia': 4.65, 'Area Rossa': 4.55, 'Area Verde': 4.85, 'Area Viola': 4.65 },
+};
+
 function buildAuditHistory() {
   const groups = [];
   let id = 1;
   for (let w = 22; w >= 14; w--) {
     const audits = [];
-    // 16 audit per settimana: 8 Safety + 8 Quality (uno per area)
     ['Safety', 'Quality'].forEach((type) => {
+      const targets = type === 'Safety' ? SAFETY_TARGETS[w] : QUALITY_TARGETS[w];
       AUDIT_AREAS_FOR_HISTORY.forEach((area, idx) => {
         const dayOffset = idx % 5;
         const date = new Date(2026, 4, 29 - (22 - w) * 7 - dayOffset);
-        // deterministic pseudo-random per (w, area, type) for stable values
-        const seed = (w * 131 + idx * 17 + (type === 'Safety' ? 7 : 23)) % 100;
-        const rnd = seed / 100;
-        const score = type === 'Safety'
-          ? +(2.55 + rnd * 0.45).toFixed(2)
-          : +(4.20 + rnd * 0.80).toFixed(2);
+        const score = +targets[area].toFixed(2);
         audits.push({
           id: id++,
           type,
           area,
           date: date.toLocaleDateString('it-IT'),
-          inspector: INSPECTOR_POOL[(idx + w + (type === 'Safety' ? 0 : 3)) % INSPECTOR_POOL.length],
+          inspector: AREA_INSPECTOR[area] || 'N/D',
           score,
         });
       });
