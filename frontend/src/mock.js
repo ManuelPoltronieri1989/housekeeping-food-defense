@@ -132,17 +132,60 @@ export const WEEKS = Array.from({ length: 22 }, (_, i) => `Settimana ${i + 1} / 
 const INSPECTOR_POOL = ['Marco Ridolfo', 'Mario La Rocca', 'Marilisa Magetti', 'Monica Abate', 'Marco Monti', 'Francesco Ferrero', 'Franco Bianchi', 'Claudia Verdi', 'Ilaria Bruno'];
 const AUDIT_AREAS_FOR_HISTORY = ['Area Gialla', 'Area Celeste', 'Area Rossa', 'Area Viola', 'Area Blu', 'Area Verde', 'Area Grigia', 'Area Arancione'];
 
-// Ispettore assegnato per area (da Zone & Calendario)
-export const AREA_INSPECTOR = {
-  'Area Gialla': 'Francesco F.',
-  'Area Verde': 'Monica',
-  'Area Viola': 'Marilisa',
-  'Area Rossa': 'Marco M.',
-  'Area Blu': 'Franco',
-  'Area Arancione': 'Mario',
-  'Area Celeste': 'Ilaria',
-  'Area Grigia': 'Claudia',
+// Rotazione ispettori (13 ruotano, Arnaldo è Jolly 6 fisso)
+export const INSPECTORS_ROTATION = [
+  'Marco M.', 'Franco', 'Mario', 'Ilaria', 'Claudia', 'Marcello',
+  'Nello', 'Manuel', 'Daniela', 'Marco R.', 'Francesco F.', 'Monica', 'Marilisa',
+];
+
+// Mappa "Area X" → chiave colonna del calendario turni
+export const AREA_TO_TURNI_KEY = {
+  'Area Gialla': 'Giallo',
+  'Area Verde': 'Verde',
+  'Area Viola': 'Viola',
+  'Area Rossa': 'Rosso',
+  'Area Blu': 'Blu',
+  'Area Arancione': 'Arancio',
+  'Area Celeste': 'Celeste',
+  'Area Grigia': 'Grigio',
 };
+
+// Calendario turni: una riga per settimana (W13 → W53) con rotazione progressiva
+export const CALENDARIO_TURNI = [];
+for (let w = 13; w <= 53; w++) {
+  const offset = ((w - 13) % INSPECTORS_ROTATION.length + INSPECTORS_ROTATION.length) % INSPECTORS_ROTATION.length;
+  const rot = (i) => INSPECTORS_ROTATION[(offset + i) % INSPECTORS_ROTATION.length];
+  CALENDARIO_TURNI.push({
+    week: w,
+    year: 2026,
+    Giallo: rot(0),
+    Verde: rot(1),
+    Viola: rot(2),
+    Rosso: rot(3),
+    Blu: rot(4),
+    Arancio: rot(5),
+    Celeste: rot(6),
+    Grigio: rot(7),
+    Jolly1: rot(8),
+    Jolly2: rot(9),
+    Jolly3: rot(10),
+    Jolly4: rot(11),
+    Jolly5: rot(12),
+    Jolly6: 'Arnaldo',
+  });
+}
+
+// Helper: chi ha eseguito l'audit di un'area in una data settimana
+export function inspectorForAreaWeek(area, week) {
+  const key = AREA_TO_TURNI_KEY[area];
+  const entry = CALENDARIO_TURNI.find((e) => e.week === week);
+  return entry?.[key] || 'N/D';
+}
+
+// Mantenuto per retrocompatibilità: ispettore "predefinito" dell'area = quello della settimana 22
+export const AREA_INSPECTOR = Object.fromEntries(
+  Object.keys(AREA_TO_TURNI_KEY).map((a) => [a, inspectorForAreaWeek(a, 22)])
+);
 
 // Target settimanale per area (Safety, 0–3) — coerente con il grafico dell'originale
 const SAFETY_TARGETS = {
@@ -186,7 +229,7 @@ function buildAuditHistory() {
           type,
           area,
           date: date.toLocaleDateString('it-IT'),
-          inspector: AREA_INSPECTOR[area] || 'N/D',
+          inspector: inspectorForAreaWeek(area, w),
           score,
         });
       });
