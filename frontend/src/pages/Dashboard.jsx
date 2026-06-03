@@ -208,51 +208,77 @@ export default function Dashboard() {
     return m;
   }, [monthlyData]);
 
-  // Aggregate user audits by week+area
-  const userWeekData = useMemo(() => {
-    const userList = [...userAudits.safety, ...userAudits.quality];
-    const byWeek = {};
-    userList.forEach((a) => {
+  // Build real weekly trend data from audit history (mock + user), filtered by current mode
+  const realWeeklyTrend = useMemo(() => {
+    const targetType = mode === 'safety' ? 'Safety' : 'Quality';
+    const all = [];
+    AUDIT_HISTORY.forEach((g) => {
+      g.audits.forEach((a) => {
+        if (a.type === targetType) {
+          all.push({ wk: g.week, yr: g.year, area: a.area, score: a.score });
+        }
+      });
+    });
+    (userAudits[mode] || []).forEach((a) => {
       const d = parseItDate(a.date);
       const wk = getISOWeek(d);
       const yr = d.getFullYear();
-      const label = `Settimana ${wk} / ${yr}`;
-      if (!byWeek[label]) byWeek[label] = { wk, yr, label, perArea: {} };
-      if (!byWeek[label].perArea[a.area]) byWeek[label].perArea[a.area] = [];
-      byWeek[label].perArea[a.area].push(a.score);
+      all.push({ wk, yr, area: a.area, score: a.score });
     });
-    Object.values(byWeek).forEach((wd) => {
-      Object.keys(wd.perArea).forEach((area) => {
-        const arr = wd.perArea[area];
-        wd.perArea[area] = +(arr.reduce((s, v) => s + v, 0) / arr.length).toFixed(2);
+
+    const grouped = {};
+    all.forEach((x) => {
+      const key = `${x.yr}-${x.wk}`;
+      if (!grouped[key]) grouped[key] = { wk: x.wk, yr: x.yr, byArea: {} };
+      if (!grouped[key].byArea[x.area]) grouped[key].byArea[x.area] = [];
+      grouped[key].byArea[x.area].push(x.score);
+    });
+
+    const entries = Object.values(grouped).map((w) => {
+      const obj = {
+        week: `S${w.wk}/${w.yr}`,
+        weekLabel: `Settimana ${w.wk} / ${w.yr}`,
+        wkNum: w.wk,
+        yr: w.yr,
+      };
+      Object.entries(w.byArea).forEach(([area, scores]) => {
+        obj[area] = +(scores.reduce((s, v) => s + v, 0) / scores.length).toFixed(2);
       });
+      return obj;
     });
-    return byWeek;
-  }, [userAudits]);
+    entries.sort((a, b) => (a.yr - b.yr) || (a.wkNum - b.wkNum));
+    return entries;
+  }, [mode, userAudits]);
 
-  // Latest available week (mock + user)
-  const latestUserWeekLabel = useMemo(() => {
-    const arr = Object.values(userWeekData);
-    if (arr.length === 0) return null;
-    arr.sort((a, b) => (b.yr - a.yr) || (b.wk - a.wk));
-    return arr[0].label;
-  }, [userWeekData]);
+  // Available week labels from real data (descending)
+  const availableWeeks = useMemo(
+    () => realWeeklyTrend.slice().reverse().map((w) => w.weekLabel),
+    [realWeeklyTrend]
+  );
+  const latestWeekLabel = availableWeeks[0] || null;
 
-  // Auto-jump to the latest week whenever the user adds an audit in a new week
+  // Lookup map by weekLabel
+  const weekDataByLabel = useMemo(() => {
+    const m = {};
+    realWeeklyTrend.forEach((w) => { m[w.weekLabel] = w; });
+    return m;
+  }, [realWeeklyTrend]);
+
+  // Auto-jump to the latest week whenever the data changes
   useEffect(() => {
-    if (latestUserWeekLabel) {
-      setSelectedWeek(latestUserWeekLabel);
+    if (latestWeekLabel) {
+      setSelectedWeek(latestWeekLabel);
     }
-  }, [latestUserWeekLabel]);
+  }, [latestWeekLabel]);
 
-  // Current "live" week: latest user week if any, otherwise week 22 baseline
+  // Current "live" week: derived from latest real week
   const currentWeek = useMemo(() => {
-    if (latestUserWeekLabel) {
-      const m = latestUserWeekLabel.match(/(\d+).*?(\d{4})/);
-      return { wk: parseInt(m[1], 10), yr: parseInt(m[2], 10), label: latestUserWeekLabel };
+    if (latestWeekLabel) {
+      const m = latestWeekLabel.match(/(\d+).*?(\d{4})/);
+      return { wk: parseInt(m[1], 10), yr: parseInt(m[2], 10), label: latestWeekLabel };
     }
     return { wk: 22, yr: 2026, label: 'Settimana 22 / 2026' };
-  }, [latestUserWeekLabel]);
+  }, [latestWeekLabel]);
 
   // Card criticità: only user-added in current week (mock ones live in Storico Segnalazioni)
   const currentWeekCriticita = useMemo(() => {
@@ -261,39 +287,10 @@ export default function Dashboard() {
   }, [userCriticita, mode, currentWeek]);
   const criticitaCount = currentWeekCriticita.length;
 
-  // Combined sorted weeks list for the dropdown (desc)
-  const allWeeks = useMemo(() => {
-    const set = new Set(WEEKS);
-    Object.keys(userWeekData).forEach((k) => set.add(k));
-    return Array.from(set).sort((a, b) => {
-      const aWk = parseInt(a.match(/\d+/)[0], 10);
-      const aYr = parseInt(a.match(/\/\s*(\d+)/)[1], 10);
-      const bWk = parseInt(b.match(/\d+/)[0], 10);
-      const bYr = parseInt(b.match(/\/\s*(\d+)/)[1], 10);
-      return (bYr - aYr) || (bWk - aWk);
-    });
-  }, [userWeekData]);
-
+  // Data for the "Media per Area" card based on the selected week
   const weekData = useMemo(() => {
-    const wk = selectedWeek.match(/\d+/)?.[0];
-    const mock = WEEKLY_TREND.find((w) => w.week.includes(`S${wk}/`));
-    const userOverride = userWeekData[selectedWeek];
-    if (mock) {
-      // Merge in user averages (override mock values where present)
-      if (userOverride) {
-        const merged = { ...mock };
-        Object.entries(userOverride.perArea).forEach(([area, val]) => { merged[area] = val; });
-        return merged;
-      }
-      return mock;
-    }
-    // Brand-new week (only user data) — show user values, others as undefined
-    const obj = { week: selectedWeek };
-    if (userOverride) {
-      Object.entries(userOverride.perArea).forEach(([area, val]) => { obj[area] = val; });
-    }
-    return obj;
-  }, [selectedWeek, userWeekData]);
+    return weekDataByLabel[selectedWeek] || { week: selectedWeek };
+  }, [selectedWeek, weekDataByLabel]);
 
   // Auto-pick defaults for month comparison based on available months
   useEffect(() => {
@@ -314,9 +311,8 @@ export default function Dashboard() {
 
   const weekValues = (areaName, weekLabel) => {
     if (!areaName || !weekLabel) return null;
-    const wk = weekLabel.match(/\d+/)?.[0];
-    const data = WEEKLY_TREND.find((w) => w.week.includes(`S${wk}/`));
-    return data ? data[areaName] : null;
+    const data = weekDataByLabel[weekLabel];
+    return data && data[areaName] !== undefined ? data[areaName] : null;
   };
   const compareA = compareTab === 'twoAreas' ? weekValues(areaA, compareWeek) : weekValues(areaA, compareWeek);
   const compareB = weekValues(areaB, compareWeek);
@@ -366,7 +362,7 @@ export default function Dashboard() {
           <h3 className="font-semibold text-gray-900 mb-4 text-[15px]">Andamento Settimanale per Area</h3>
           <div className="h-[340px]">
             <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={WEEKLY_TREND} margin={{ top: 8, right: 16, bottom: 8, left: -16 }}>
+              <LineChart data={realWeeklyTrend} margin={{ top: 8, right: 16, bottom: 8, left: -16 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" />
                 <XAxis dataKey="week" tick={{ fontSize: 11, fill: '#6b7280' }} axisLine={{ stroke: '#e5e7eb' }} tickLine={false} />
                 <YAxis domain={[0, 3.2]} ticks={[0, 1, 2, 3]} tick={{ fontSize: 11, fill: '#6b7280' }} axisLine={false} tickLine={false} />
@@ -400,7 +396,7 @@ export default function Dashboard() {
             <Select value={selectedWeek} onValueChange={setSelectedWeek}>
               <SelectTrigger className="w-[180px] h-9 text-xs"><SelectValue /></SelectTrigger>
               <SelectContent>
-                {allWeeks.map((w) => (
+                {availableWeeks.map((w) => (
                   <SelectItem key={w} value={w}>{w}</SelectItem>
                 ))}
               </SelectContent>
@@ -483,7 +479,7 @@ export default function Dashboard() {
             </Select>
             <Select value={compareWeek} onValueChange={setCompareWeek}>
               <SelectTrigger className="h-10"><SelectValue placeholder="Settimana" /></SelectTrigger>
-              <SelectContent>{allWeeks.map((w) => <SelectItem key={w} value={w}>{w}</SelectItem>)}</SelectContent>
+              <SelectContent>{availableWeeks.map((w) => <SelectItem key={w} value={w}>{w}</SelectItem>)}</SelectContent>
             </Select>
           </div>
           <div className="mt-5">
