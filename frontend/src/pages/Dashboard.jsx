@@ -462,12 +462,10 @@ export default function Dashboard() {
                 <div className="bg-gray-50 rounded-lg p-4 text-center border border-gray-100">
                   <div className="text-xs text-gray-500">{monthA || '—'}</div>
                   <div className="text-3xl font-bold text-gray-800 mt-1">{valA !== null ? valA.toFixed(2) : '—'}</div>
-                  {monthMap[monthA] && <div className="text-[11px] text-gray-500 mt-1">{monthMap[monthA].count} audit</div>}
                 </div>
                 <div className="bg-emerald-50 rounded-lg p-4 text-center border border-emerald-100">
                   <div className="text-xs text-emerald-700">{monthB || '—'}</div>
                   <div className="text-3xl font-bold text-emerald-700 mt-1">{valB !== null ? valB.toFixed(2) : '—'}</div>
-                  {monthMap[monthB] && <div className="text-[11px] text-emerald-700/70 mt-1">{monthMap[monthB].count} audit</div>}
                 </div>
               </div>
               {hasBoth && (
