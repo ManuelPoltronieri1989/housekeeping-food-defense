@@ -144,6 +144,31 @@ export default function NuovoAudit() {
     const avgScore = answeredScores.length > 0
       ? +(answeredScores.reduce((s, v) => s + v, 0) / answeredScores.length).toFixed(2)
       : 0;
+    // Build sectorScores: { sectorName: { qid: score, ... } }
+    const sectorScores = {};
+    sectors.forEach((sec, sIdx) => {
+      const sec_scores = {};
+      questions.forEach((q) => {
+        const v = scores[`${sIdx}-${q.id}`];
+        if (v !== undefined) sec_scores[q.id] = v;
+      });
+      sectorScores[sec] = sec_scores;
+    });
+    // Build sectorComments and sectorPhotos similarly
+    const sectorComments = {};
+    const sectorPhotos = {};
+    sectors.forEach((sec, sIdx) => {
+      const sc = {};
+      const sp = {};
+      questions.forEach((q) => {
+        const k = `${sIdx}-${q.id}`;
+        if (comments[k]) sc[q.id] = comments[k];
+        if (photos[k]) sp[q.id] = photos[k];
+      });
+      sectorComments[sec] = sc;
+      sectorPhotos[sec] = sp;
+    });
+
     addAudit(mode, {
       id: `user-${Date.now()}`,
       type: typeLabel,
@@ -152,6 +177,11 @@ export default function NuovoAudit() {
       inspector: ispettore,
       score: avgScore,
       criticita: newCriticita,
+      sectorScores,
+      sectorComments,
+      sectorPhotos,
+      threshold,
+      maxScore,
     });
 
     toast.success('Audit salvato con successo', {

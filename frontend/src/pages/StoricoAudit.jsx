@@ -75,7 +75,7 @@ const WeekGroup = ({ group, defaultOpen = false, onView, onEdit, onDelete }) => 
   );
 };
 
-// Deterministic "scheda" generation based on audit id + average score
+// Deterministic "scheda" generation; uses real per-question scores when available
 const buildSchedaData = (audit) => {
   const isSafety = audit.type === 'Safety';
   const questions = isSafety ? SAFETY_QUESTIONS : QUALITY_QUESTIONS;
@@ -83,26 +83,43 @@ const buildSchedaData = (audit) => {
   const minS = isSafety ? 0 : 1;
   const threshold = isSafety ? 2 : 3;
   const reparti = (AREAS_REPARTI[audit.area] || ['Reparto principale']);
-  const target = audit.score; // average target
-  // Deterministic pseudo-random per audit
-  const seed = (audit.id * 9301 + 49297) % 233280;
-  let rng = seed;
-  const rand = () => { rng = (rng * 9301 + 49297) % 233280; return rng / 233280; };
+  const target = audit.score;
+
+  // Deterministic pseudo-random per audit (stable across renders)
+  const idStr = String(audit.id || '');
+  let seed = 0;
+  for (let i = 0; i < idStr.length; i++) seed = (seed * 31 + idStr.charCodeAt(i)) & 0xffffffff;
+  seed = Math.abs(seed) || 1;
+  const rand = () => { seed = (seed * 9301 + 49297) % 233280; return seed / 233280; };
+
+  const hasUserScores = !!audit.sectorScores;
 
   const sectorsData = reparti.map((sector) => {
+    const userScores = hasUserScores ? audit.sectorScores[sector] || {} : {};
+    const userComments = audit.sectorComments?.[sector] || {};
+    const userPhotos = audit.sectorPhotos?.[sector] || {};
     const qResults = questions.map((q) => {
-      // bias around target, occasionally lower
-      const variance = (rand() - 0.5) * 1.4;
-      let v = Math.round(target + variance);
-      if (v > maxS) v = maxS;
-      if (v < minS) v = minS;
+      let v;
+      let comment = null;
+      let photo = null;
+      if (hasUserScores && userScores[q.id] !== undefined) {
+        v = userScores[q.id];
+        comment = userComments[q.id] || null;
+        photo = userPhotos[q.id] || null;
+      } else {
+        const variance = (rand() - 0.5) * 1.4;
+        v = Math.round(target + variance);
+        if (v > maxS) v = maxS;
+        if (v < minS) v = minS;
+      }
       const isCrit = v < threshold;
       return {
         id: q.id,
         text: q.text,
         score: v,
         critical: isCrit,
-        commento: isCrit ? `Verificare ${sector.toLowerCase()}, riscontrate anomalie da approfondire. Richiesto intervento correttivo.` : null,
+        commento: comment || (isCrit ? `Verificare ${sector.toLowerCase()}, riscontrate anomalie da approfondire. Richiesto intervento correttivo.` : null),
+        photo,
       };
     });
     return { name: sector, results: qResults };
@@ -178,6 +195,11 @@ const SchedaDialog = ({ audit, onClose }) => {
                           <AlertTriangle className="w-3.5 h-3.5 text-red-600 mt-0.5 shrink-0" />
                           <div className="text-[12px] text-gray-700 leading-relaxed">{r.commento}</div>
                         </div>
+                      )}
+                      {r.photo && (
+                        <a href={r.photo} target="_blank" rel="noopener noreferrer" className="mt-2 inline-block">
+                          <img src={r.photo} alt="Foto" className="h-20 rounded-md border border-gray-200 shadow-sm hover:opacity-95" />
+                        </a>
                       )}
                     </div>
                     <div className={`shrink-0 w-12 h-12 rounded-lg flex items-center justify-center text-[16px] font-bold ${

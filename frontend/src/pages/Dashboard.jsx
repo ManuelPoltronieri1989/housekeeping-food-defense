@@ -160,7 +160,7 @@ const CustomTooltip = ({ active, payload, label }) => {
 };
 
 export default function Dashboard() {
-  const { getCriticita, getStats, userAudits, userCriticita, auditHistory } = useAudit();
+  const { getCriticita, getStats, userAudits, userCriticita, dismissedIds, resolvedMap, auditHistory } = useAudit();
   const [mode, setMode] = useState('safety');
   const [selectedWeek, setSelectedWeek] = useState('Settimana 22 / 2026');
   const [monthA, setMonthA] = useState('');
@@ -281,11 +281,16 @@ export default function Dashboard() {
     return { wk: 22, yr: 2026, label: 'Settimana 22 / 2026' };
   }, [latestWeekLabel]);
 
-  // Card criticità: only user-added in current week (mock ones live in Storico Segnalazioni)
+  // Card criticità: only user-added in current week — escludi quelle archiviate (cestino) o risolte
   const currentWeekCriticita = useMemo(() => {
     const list = userCriticita[mode] || [];
-    return list.filter((c) => c.wk === currentWeek.wk && c.yr === currentWeek.yr);
-  }, [userCriticita, mode, currentWeek]);
+    return list.filter((c) => {
+      if (c.wk !== currentWeek.wk || c.yr !== currentWeek.yr) return false;
+      if (c.id && dismissedIds.has(c.id)) return false;
+      if (c.id && resolvedMap[c.id]) return false;
+      return true;
+    });
+  }, [userCriticita, mode, currentWeek, dismissedIds, resolvedMap]);
   const criticitaCount = currentWeekCriticita.length;
 
   // Data for the "Media per Area" card based on the selected week
