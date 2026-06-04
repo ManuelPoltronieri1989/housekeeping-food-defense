@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { AlertTriangle, Shield, Star, ChevronUp, ChevronDown, Search, X, Trash2, FileText, CheckCircle2, Clock, RotateCcw } from 'lucide-react';
+import { AlertTriangle, Shield, Star, ChevronUp, ChevronDown, Search, X, Trash2, FileText, CheckCircle2, Clock, RotateCcw, Camera } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAudit } from '../context/AuditContext';
 import { AREA_COLORS, AREA_ORDER } from '../mock';
@@ -61,6 +61,11 @@ const SegnRow = ({ c, onView, onResolve, onUnresolve, onDelete }) => {
             <StatusBadge resolved={c.resolved} resolvedDate={c.resolvedDate} />
             <span className="px-2 py-0.5 rounded-md text-[11px] font-semibold" style={{ background: col?.light, color: col?.text }}>{c.area}</span>
             <span className="text-[12px] text-gray-500">› {c.reparto}</span>
+            {c.photo && (
+              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[11px] font-semibold border bg-gray-50 text-gray-600 border-gray-200" title="Foto allegata">
+                <Camera className="w-3 h-3" />
+              </span>
+            )}
           </div>
           <div className="text-[13.5px] text-gray-800 mt-1.5 leading-relaxed">{c.commento || <span className="italic text-gray-400">Nessun commento</span>}</div>
           <div className="text-[12px] text-gray-500 mt-1.5">
@@ -334,6 +339,18 @@ export default function StoricoSegnalazioni() {
                   {viewing.commento || <span className="italic text-gray-400">Nessun commento</span>}
                 </div>
               </div>
+              {viewing.photo && (
+                <div>
+                  <div className="text-xs text-gray-500 mb-1">Foto allegata</div>
+                  <a href={viewing.photo} target="_blank" rel="noopener noreferrer" className="block">
+                    <img
+                      src={viewing.photo}
+                      alt="Foto criticità"
+                      className="max-h-72 w-auto rounded-md border border-gray-200 shadow-sm hover:opacity-95 transition-opacity"
+                    />
+                  </a>
+                </div>
+              )}
             </div>
           )}
         </DialogContent>

@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { Shield, Star, Building2, Check, Save, AlertTriangle, MessageSquare } from 'lucide-react';
+import { Shield, Star, Building2, Check, Save, AlertTriangle, MessageSquare, Camera, X as XIcon } from 'lucide-react';
 import { toast } from 'sonner';
 import { AREA_ORDER, AREAS_REPARTI, SAFETY_QUESTIONS, QUALITY_QUESTIONS, AREA_COLORS } from '../mock';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
@@ -29,6 +29,7 @@ export default function NuovoAudit() {
   const [ispettore, setIspettore] = useState('');
   const [scores, setScores] = useState({});
   const [comments, setComments] = useState({});
+  const [photos, setPhotos] = useState({});
 
   const questions = mode === 'safety' ? SAFETY_QUESTIONS : QUALITY_QUESTIONS;
   const maxScore = mode === 'safety' ? 3 : 5;
@@ -49,6 +50,33 @@ export default function NuovoAudit() {
     setComments((prev) => ({ ...prev, [`${sectorIdx}-${qid}`]: val }));
   };
 
+  const setPhoto = (sectorIdx, qid, dataUrl) => {
+    setPhotos((prev) => ({ ...prev, [`${sectorIdx}-${qid}`]: dataUrl }));
+  };
+
+  const removePhoto = (sectorIdx, qid) => {
+    setPhotos((prev) => {
+      const { [`${sectorIdx}-${qid}`]: _, ...rest } = prev;
+      return rest;
+    });
+  };
+
+  const onPhotoChange = (sectorIdx, qid, e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      toast.error('Seleziona un file immagine valido');
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error('La foto supera i 5 MB');
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = (ev) => setPhoto(sectorIdx, qid, ev.target.result);
+    reader.readAsDataURL(file);
+  };
+
   const totalAnswered = Object.keys(scores).length;
   const totalQuestions = sectors.length * questions.length;
   const totalCriticita = Object.entries(scores).filter(([_, v]) => v < threshold).length;
@@ -57,6 +85,7 @@ export default function NuovoAudit() {
   const resetForm = () => {
     setScores({});
     setComments({});
+    setPhotos({});
   };
 
   const onSave = () => {
@@ -95,6 +124,7 @@ export default function NuovoAudit() {
           reparto: sector,
           score: val,
           commento: comments[key] || '',
+          photo: photos[key] || null,
           inspector: ispettore,
           date: formattedDate,
           wk,
@@ -262,6 +292,39 @@ export default function NuovoAudit() {
                               placeholder="Descrivi il problema riscontrato, l'azione correttiva proposta e l'urgenza…"
                               className={`pl-9 min-h-[72px] text-[13px] ${missingComment ? 'border-red-300 focus-visible:ring-red-300' : ''}`}
                             />
+                          </div>
+
+                          {/* Foto allegato */}
+                          <div className="mt-2.5">
+                            {photos[key] ? (
+                              <div className="relative inline-block">
+                                <img
+                                  src={photos[key]}
+                                  alt="Foto criticità"
+                                  className="h-24 w-auto rounded-md border border-gray-200 shadow-sm"
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => removePhoto(sIdx, q.id)}
+                                  className="absolute -top-2 -right-2 bg-white border border-gray-200 rounded-full w-6 h-6 flex items-center justify-center text-gray-500 hover:text-red-600 hover:border-red-300 shadow-sm"
+                                  title="Rimuovi foto"
+                                >
+                                  <XIcon className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            ) : (
+                              <label className="inline-flex items-center gap-2 text-[12px] text-gray-600 hover:text-emerald-700 cursor-pointer border border-dashed border-gray-300 rounded-md px-3 py-2 hover:border-emerald-300 hover:bg-emerald-50/40 transition-colors">
+                                <Camera className="w-3.5 h-3.5" />
+                                <span>Carica una foto (opzionale)</span>
+                                <input
+                                  type="file"
+                                  accept="image/*"
+                                  capture="environment"
+                                  className="hidden"
+                                  onChange={(e) => onPhotoChange(sIdx, q.id, e)}
+                                />
+                              </label>
+                            )}
                           </div>
                         </div>
                       )}
