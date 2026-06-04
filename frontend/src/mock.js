@@ -171,7 +171,7 @@ for (let w = 13; w <= 53; w++) {
     Jolly3: rot(10),
     Jolly4: rot(11),
     Jolly5: rot(12),
-    Jolly6: 'Arnaldo',
+    Jolly6: 'Amato',
   });
 }
 

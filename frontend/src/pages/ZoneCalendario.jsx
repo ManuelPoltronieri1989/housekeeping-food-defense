@@ -121,24 +121,27 @@ export default function ZoneCalendario() {
 
       {/* Calendario Turni Ispettori */}
       <div className="bg-white rounded-xl border border-gray-200/80 shadow-sm overflow-hidden">
-        <div className="px-5 py-4 border-b border-gray-100 flex items-center gap-3">
+        <div className="px-5 py-4 border-b border-gray-100 flex items-center gap-3 flex-wrap">
           <Users className="w-4 h-4 text-gray-500" />
           <span className="font-semibold text-gray-900 text-[15px]">Calendario Turni Ispettori</span>
-          <span className="ml-auto text-[12px] text-gray-500">Settimana corrente evidenziata in verde</span>
+          <span className="ml-auto inline-flex items-center gap-2 text-[12px] text-gray-600">
+            <span className="inline-block w-3 h-3 rounded bg-emerald-500"></span>
+            Settimana corrente
+          </span>
         </div>
         <div className="overflow-x-auto">
-          <table className="w-full text-[12.5px]">
+          <table className="w-full table-fixed text-[11.5px]">
             <thead>
               <tr className="bg-gray-50 border-b border-gray-200">
-                <th className="px-3 py-2.5 text-left text-[11px] font-semibold text-gray-600 uppercase tracking-wider sticky left-0 bg-gray-50 z-10">Week</th>
+                <th className="w-[52px] px-1.5 py-2 text-center text-[10px] font-bold text-gray-600 uppercase tracking-wider sticky left-0 bg-gray-50 z-10">Week</th>
                 {COLUMNS.map((col) => (
                   <th
                     key={col.key}
-                    className="px-3 py-2.5 text-center text-[11px] font-semibold uppercase tracking-wider"
+                    className="px-1 py-2 text-center text-[10px] font-bold uppercase tracking-wide whitespace-nowrap"
                     style={
                       AREA_COLOR_MAP[col.key]
                         ? { backgroundColor: AREA_COLOR_MAP[col.key], color: '#fff' }
-                        : { color: '#6b7280' }
+                        : { color: '#6b7280', backgroundColor: '#f3f4f6' }
                     }
                   >
                     {col.label}
@@ -153,12 +156,12 @@ export default function ZoneCalendario() {
                   <tr
                     key={entry.week}
                     className={`border-b border-gray-100 transition-colors ${
-                      isCurrent ? 'bg-emerald-50 hover:bg-emerald-100' : 'hover:bg-gray-50'
+                      isCurrent ? 'bg-emerald-500/15 ring-2 ring-emerald-500 ring-inset' : 'hover:bg-gray-50'
                     }`}
                   >
                     <td
-                      className={`px-3 py-2 font-semibold text-[12px] sticky left-0 z-[5] ${
-                        isCurrent ? 'bg-emerald-50 text-emerald-700' : 'bg-white text-gray-700'
+                      className={`px-1.5 py-2 font-bold text-[11.5px] text-center sticky left-0 z-[5] ${
+                        isCurrent ? 'bg-emerald-500 text-white' : 'bg-white text-gray-700'
                       }`}
                     >
                       W{entry.week}
@@ -166,9 +169,10 @@ export default function ZoneCalendario() {
                     {COLUMNS.map((col) => (
                       <td
                         key={col.key}
-                        className={`px-3 py-2 text-center whitespace-nowrap ${
-                          isCurrent ? 'text-emerald-800 font-medium' : 'text-gray-700'
+                        className={`px-1 py-2 text-center text-[11px] truncate ${
+                          isCurrent ? 'text-emerald-900 font-semibold' : 'text-gray-700'
                         }`}
+                        title={entry[col.key]}
                       >
                         {entry[col.key]}
                       </td>
