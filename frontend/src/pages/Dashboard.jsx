@@ -473,7 +473,16 @@ export default function Dashboard() {
                   diff > 0 ? 'bg-emerald-50 text-emerald-700' : diff < 0 ? 'bg-red-50 text-red-700' : 'bg-gray-50 text-gray-600'
                 }`}>
                   {diff > 0 ? <ArrowUp className="w-4 h-4" /> : diff < 0 ? <ArrowDown className="w-4 h-4" /> : <Minus className="w-4 h-4" />}
-                  <span>{Math.abs(diff).toFixed(2)} rispetto al mese A</span>
+                  <span>
+                    {diff > 0 ? '+' : diff < 0 ? '−' : ''}
+                    {Math.abs(diff).toFixed(2)}
+                    {valA > 0 && (
+                      <span className="ml-1.5 font-semibold">
+                        ({diff > 0 ? '+' : diff < 0 ? '−' : ''}{Math.abs((diff / valA) * 100).toFixed(1)}%)
+                      </span>
+                    )}
+                    <span className="text-xs font-normal opacity-80 ml-1.5">rispetto al mese A</span>
+                  </span>
                 </div>
               )}
             </>
@@ -528,24 +537,49 @@ export default function Dashboard() {
                 {compareTab === 'twoAreas' ? 'Seleziona due aree e una settimana' : "Seleziona un'area e due settimane"}
               </div>
             ) : (
-              <div className="grid grid-cols-2 gap-3">
-                <div className="rounded-lg p-4 border" style={{ backgroundColor: compareColors.A?.light, borderColor: compareColors.A?.bg }}>
-                  <div className="text-xs font-semibold" style={{ color: compareColors.A?.text }}>
-                    {compareTab === 'twoAreas' ? labelA : `${areaA} · ${labelA}`}
+              <>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="rounded-lg p-4 border" style={{ backgroundColor: compareColors.A?.light, borderColor: compareColors.A?.bg }}>
+                    <div className="text-xs font-semibold" style={{ color: compareColors.A?.text }}>
+                      {compareTab === 'twoAreas' ? labelA : `${areaA} · ${labelA}`}
+                    </div>
+                    <div className="text-3xl font-bold mt-1" style={{ color: compareColors.A?.text }}>
+                      {compareA !== null && compareA !== undefined ? compareA.toFixed(2) : '—'}
+                    </div>
                   </div>
-                  <div className="text-3xl font-bold mt-1" style={{ color: compareColors.A?.text }}>
-                    {compareA !== null && compareA !== undefined ? compareA.toFixed(2) : '—'}
+                  <div className="rounded-lg p-4 border" style={{ backgroundColor: compareColors.B?.light, borderColor: compareColors.B?.bg }}>
+                    <div className="text-xs font-semibold" style={{ color: compareColors.B?.text }}>
+                      {compareTab === 'twoAreas' ? labelB : `${areaA} · ${labelB}`}
+                    </div>
+                    <div className="text-3xl font-bold mt-1" style={{ color: compareColors.B?.text }}>
+                      {compareB !== null && compareB !== undefined ? compareB.toFixed(2) : '—'}
+                    </div>
                   </div>
                 </div>
-                <div className="rounded-lg p-4 border" style={{ backgroundColor: compareColors.B?.light, borderColor: compareColors.B?.bg }}>
-                  <div className="text-xs font-semibold" style={{ color: compareColors.B?.text }}>
-                    {compareTab === 'twoAreas' ? labelB : `${areaA} · ${labelB}`}
-                  </div>
-                  <div className="text-3xl font-bold mt-1" style={{ color: compareColors.B?.text }}>
-                    {compareB !== null && compareB !== undefined ? compareB.toFixed(2) : '—'}
-                  </div>
-                </div>
-              </div>
+                {compareA !== null && compareA !== undefined && compareB !== null && compareB !== undefined && (() => {
+                  const wkDiff = compareB - compareA;
+                  const pct = compareA !== 0 ? (wkDiff / compareA) * 100 : 0;
+                  return (
+                    <div className={`mt-3 flex items-center justify-center gap-2 rounded-lg py-2.5 text-sm font-medium ${
+                      wkDiff > 0 ? 'bg-emerald-50 text-emerald-700' : wkDiff < 0 ? 'bg-red-50 text-red-700' : 'bg-gray-50 text-gray-600'
+                    }`}>
+                      {wkDiff > 0 ? <ArrowUp className="w-4 h-4" /> : wkDiff < 0 ? <ArrowDown className="w-4 h-4" /> : <Minus className="w-4 h-4" />}
+                      <span>
+                        {wkDiff > 0 ? '+' : wkDiff < 0 ? '−' : ''}
+                        {Math.abs(wkDiff).toFixed(2)}
+                        {compareA !== 0 && (
+                          <span className="ml-1.5 font-semibold">
+                            ({wkDiff > 0 ? '+' : wkDiff < 0 ? '−' : ''}{Math.abs(pct).toFixed(1)}%)
+                          </span>
+                        )}
+                        <span className="text-xs font-normal opacity-80 ml-1.5">
+                          {compareTab === 'twoAreas' ? `rispetto a ${labelA}` : `rispetto a ${labelA}`}
+                        </span>
+                      </span>
+                    </div>
+                  );
+                })()}
+              </>
             )}
           </div>
         </div>
