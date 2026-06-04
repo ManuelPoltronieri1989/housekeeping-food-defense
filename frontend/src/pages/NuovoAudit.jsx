@@ -92,6 +92,10 @@ export default function NuovoAudit() {
     if (!area) { toast.error("Seleziona un'area"); return; }
     if (!ispettore.trim()) { toast.error("Inserisci il nome dell'ispettore"); return; }
     if (totalAnswered === 0) { toast.error('Compila almeno una domanda'); return; }
+    if (totalAnswered < totalQuestions) {
+      toast.error(`Compila tutte le domande prima di salvare (${totalAnswered}/${totalQuestions})`);
+      return;
+    }
     if (criticityMissingComment > 0) {
       toast.error(`Aggiungi un commento per ${criticityMissingComment} criticità`);
       return;
@@ -381,9 +385,9 @@ export default function NuovoAudit() {
             </div>
             <button
               onClick={onSave}
-              disabled={criticityMissingComment > 0}
+              disabled={criticityMissingComment > 0 || totalAnswered < totalQuestions}
               className={`flex items-center gap-2 px-5 h-10 text-white text-sm font-medium rounded-lg shadow-sm transition-colors ${
-                criticityMissingComment > 0
+                criticityMissingComment > 0 || totalAnswered < totalQuestions
                   ? 'bg-gray-300 cursor-not-allowed'
                   : 'bg-emerald-600 hover:bg-emerald-700'
               }`}

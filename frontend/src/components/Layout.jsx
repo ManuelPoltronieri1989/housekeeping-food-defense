@@ -23,7 +23,7 @@ export default function Layout() {
           </div>
           <div className="leading-tight">
             <div className="font-semibold text-[15px] text-white">Housekeeping &amp; Food Defense</div>
-            <div className="text-xs text-gray-400 mt-0.5">Magazzino</div>
+            <div className="text-xs text-gray-400 mt-0.5">Logistica</div>
           </div>
         </div>
 
