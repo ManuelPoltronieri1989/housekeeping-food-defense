@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { MapPin, Building2, HelpCircle, Plus, Pencil, Trash2, Shield, Star } from 'lucide-react';
 import { toast } from 'sonner';
 import {
@@ -12,6 +12,23 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription
 } from '../components/ui/dialog';
+
+// Hook: stato persistito su localStorage
+const LS_PREFIX = 'hk_config_v1_';
+function usePersistedState(key, initial) {
+  const storageKey = LS_PREFIX + key;
+  const [value, setValue] = useState(() => {
+    try {
+      const raw = localStorage.getItem(storageKey);
+      if (raw !== null) return JSON.parse(raw);
+    } catch {}
+    return typeof initial === 'function' ? initial() : initial;
+  });
+  useEffect(() => {
+    try { localStorage.setItem(storageKey, JSON.stringify(value)); } catch {}
+  }, [storageKey, value]);
+  return [value, setValue];
+}
 
 const TabButton = ({ active, onClick, Icon, label }) => (
   <button
@@ -27,7 +44,9 @@ const TabButton = ({ active, onClick, Icon, label }) => (
 
 // ============ AREE TAB ============
 function AreeTab() {
-  const [areas, setAreas] = useState(AREA_ORDER.map((a) => ({ name: a, color: AREA_COLORS[a].accent, enabled: true })));
+  const [areas, setAreas] = usePersistedState('areas', () =>
+    AREA_ORDER.map((a) => ({ name: a, color: AREA_COLORS[a].accent, enabled: true }))
+  );
   const [editing, setEditing] = useState(null);
   const [deleting, setDeleting] = useState(null);
   const [newOpen, setNewOpen] = useState(false);
@@ -126,7 +145,7 @@ function RepartiTab() {
     });
     return list;
   }, []);
-  const [reparti, setReparti] = useState(initial);
+  const [reparti, setReparti] = usePersistedState('reparti', initial);
   const [filter, setFilter] = useState('all');
   const [editing, setEditing] = useState(null);
   const [deleting, setDeleting] = useState(null);
@@ -228,7 +247,7 @@ function DomandeTab() {
   const [mode, setMode] = useState('Safety');
   const [filterArea, setFilterArea] = useState('all');
   const [filterReparto, setFilterReparto] = useState('all');
-  const [questions, setQuestions] = useState({ Safety: SAFETY_CONFIG_QUESTIONS, Quality: QUALITY_CONFIG_QUESTIONS });
+  const [questions, setQuestions] = usePersistedState('questions', { Safety: SAFETY_CONFIG_QUESTIONS, Quality: QUALITY_CONFIG_QUESTIONS });
   const [editing, setEditing] = useState(null);
   const [deleting, setDeleting] = useState(null);
   const [newOpen, setNewOpen] = useState(false);
@@ -246,7 +265,7 @@ function DomandeTab() {
     if (filterReparto !== 'all') l = l.filter((q) => q.reparto === filterReparto);
     // Ordina per codice (Q001, Q002, ... oppure S001, S002, ...)
     l = [...l].sort((a, b) => String(a.code || '').localeCompare(String(b.code || ''), undefined, { numeric: true, sensitivity: 'base' }));
-    return l.slice(0, 80); // cap list for performance
+    return l;
   }, [questions, mode, filterArea, filterReparto]);
 
   const openEdit = (q) => {
