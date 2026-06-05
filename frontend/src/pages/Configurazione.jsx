@@ -244,6 +244,8 @@ function DomandeTab() {
     let l = questions[mode];
     if (filterArea !== 'all') l = l.filter((q) => q.area === filterArea);
     if (filterReparto !== 'all') l = l.filter((q) => q.reparto === filterReparto);
+    // Ordina per codice (Q001, Q002, ... oppure S001, S002, ...)
+    l = [...l].sort((a, b) => String(a.code || '').localeCompare(String(b.code || ''), undefined, { numeric: true, sensitivity: 'base' }));
     return l.slice(0, 80); // cap list for performance
   }, [questions, mode, filterArea, filterReparto]);
 
