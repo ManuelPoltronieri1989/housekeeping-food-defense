@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useCallback, useMemo, useEffect } from 'react';
-import { DASHBOARD_STATS, AUDIT_HISTORY } from '../mock';
+import { DASHBOARD_STATS, AUDIT_HISTORY, SAFETY_CONFIG_QUESTIONS, QUALITY_CONFIG_QUESTIONS } from '../mock';
 
 const AuditContext = createContext(null);
 
@@ -47,6 +47,28 @@ export function AuditProvider({ children }) {
   const [dismissedIds, setDismissedIds] = useState(initial?.dismissedIds || new Set());
   const [resolvedMap, setResolvedMap] = useState(initial?.resolvedMap || {});
   const [auditHistory, setAuditHistory] = useState(initial?.auditHistory || AUDIT_HISTORY);
+
+  // Domande configurate (Safety + Quality) — condivise con la pagina Configurazione
+  const [configQuestions, setConfigQuestions] = useState(() => {
+    try {
+      const raw = localStorage.getItem('hk_config_v1_questions');
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed?.Safety && parsed?.Quality) return parsed;
+      }
+    } catch {}
+    return { Safety: SAFETY_CONFIG_QUESTIONS, Quality: QUALITY_CONFIG_QUESTIONS };
+  });
+  useEffect(() => {
+    try { localStorage.setItem('hk_config_v1_questions', JSON.stringify(configQuestions)); } catch {}
+  }, [configQuestions]);
+
+  // Helper: ritorna le domande attive per (area, reparto, mode)
+  const getQuestionsForSector = useCallback((area, reparto, mode) => {
+    const typeKey = mode === 'safety' ? 'Safety' : 'Quality';
+    const all = configQuestions[typeKey] || [];
+    return all.filter((q) => q.area === area && q.reparto === reparto && q.enabled !== false);
+  }, [configQuestions]);
 
   // Persist on every change
   useEffect(() => {
@@ -170,6 +192,9 @@ export function AuditProvider({ children }) {
       auditHistory,
       dismissedIds,
       resolvedMap,
+      configQuestions,
+      setConfigQuestions,
+      getQuestionsForSector,
       addCriticita,
       dismissCriticita,
       resolveCriticita,
@@ -183,7 +208,7 @@ export function AuditProvider({ children }) {
       getAllCriticita,
       getStats,
     }),
-    [userCriticita, userAudits, auditHistory, dismissedIds, resolvedMap, addCriticita, dismissCriticita, resolveCriticita, unresolveCriticita, addAudit, updateAudit, removeAudit, updateMockAudit, removeMockAudit, getCriticita, getAllCriticita, getStats]
+    [userCriticita, userAudits, auditHistory, dismissedIds, resolvedMap, configQuestions, setConfigQuestions, getQuestionsForSector, addCriticita, dismissCriticita, resolveCriticita, unresolveCriticita, addAudit, updateAudit, removeAudit, updateMockAudit, removeMockAudit, getCriticita, getAllCriticita, getStats]
   );
 
   return <AuditContext.Provider value={value}>{children}</AuditContext.Provider>;

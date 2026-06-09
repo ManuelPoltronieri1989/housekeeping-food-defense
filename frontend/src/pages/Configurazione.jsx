@@ -3,8 +3,8 @@ import { MapPin, Building2, HelpCircle, Plus, Pencil, Trash2, Shield, Star } fro
 import { toast } from 'sonner';
 import {
   AREA_ORDER, AREA_COLORS, AREAS_REPARTI,
-  SAFETY_CONFIG_QUESTIONS, QUALITY_CONFIG_QUESTIONS
 } from '../mock';
+import { useAudit } from '../context/AuditContext';
 import { Input } from '../components/ui/input';
 import { Textarea } from '../components/ui/textarea';
 import { Switch } from '../components/ui/switch';
@@ -244,10 +244,12 @@ function RepartiTab() {
 
 // ============ DOMANDE TAB ============
 function DomandeTab() {
+  const { configQuestions, setConfigQuestions } = useAudit();
   const [mode, setMode] = useState('Safety');
   const [filterArea, setFilterArea] = useState('all');
   const [filterReparto, setFilterReparto] = useState('all');
-  const [questions, setQuestions] = usePersistedState('questions', { Safety: SAFETY_CONFIG_QUESTIONS, Quality: QUALITY_CONFIG_QUESTIONS });
+  const questions = configQuestions;
+  const setQuestions = (updater) => setConfigQuestions(typeof updater === 'function' ? updater(configQuestions) : updater);
   const [editing, setEditing] = useState(null);
   const [deleting, setDeleting] = useState(null);
   const [newOpen, setNewOpen] = useState(false);

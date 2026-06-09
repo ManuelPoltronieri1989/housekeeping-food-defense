@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { Shield, Star, Building2, Check, Save, AlertTriangle, MessageSquare, Camera, X as XIcon } from 'lucide-react';
 import { toast } from 'sonner';
-import { AREA_ORDER, AREAS_REPARTI, SAFETY_QUESTIONS, QUALITY_QUESTIONS, AREA_COLORS } from '../mock';
+import { AREA_ORDER, AREAS_REPARTI, AREA_COLORS } from '../mock';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { Input } from '../components/ui/input';
 import { Textarea } from '../components/ui/textarea';
@@ -22,7 +22,7 @@ const ScoreButton = ({ value, selected, onClick, accent, isCritical }) => (
 );
 
 export default function NuovoAudit() {
-  const { addCriticita, addAudit } = useAudit();
+  const { addCriticita, addAudit, getQuestionsForSector } = useAudit();
   const [mode, setMode] = useState('safety');
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
   const [area, setArea] = useState('');
@@ -31,17 +31,26 @@ export default function NuovoAudit() {
   const [comments, setComments] = useState({});
   const [photos, setPhotos] = useState({});
 
-  const questions = mode === 'safety' ? SAFETY_QUESTIONS : QUALITY_QUESTIONS;
   const maxScore = mode === 'safety' ? 3 : 5;
   const threshold = mode === 'safety' ? 2 : 3; // sotto questa soglia => criticità
-  const scoreOptions = Array.from({ length: maxScore + 1 }, (_, i) => (mode === 'quality' ? i + 1 : i)).slice(0, maxScore + 1);
   // Safety: 0..3 ; Quality: 1..5
-  const finalOptions = mode === 'safety'
-    ? [0, 1, 2, 3]
-    : [1, 2, 3, 4, 5];
+  const finalOptions = mode === 'safety' ? [0, 1, 2, 3] : [1, 2, 3, 4, 5];
   const accent = area ? AREA_COLORS[area].accent : '#3b82f6';
 
   const sectors = useMemo(() => (area ? AREAS_REPARTI[area] || [] : []), [area]);
+
+  // Domande per ciascun reparto, prese dalla Configurazione (Context)
+  const sectorsWithQuestions = useMemo(() => sectors.map((sec) => ({
+    name: sec,
+    questions: getQuestionsForSector(area, sec, mode).slice().sort((a, b) =>
+      String(a.code || '').localeCompare(String(b.code || ''), undefined, { numeric: true, sensitivity: 'base' })
+    ),
+  })), [sectors, area, mode, getQuestionsForSector]);
+
+  const totalQuestions = useMemo(
+    () => sectorsWithQuestions.reduce((s, sec) => s + sec.questions.length, 0),
+    [sectorsWithQuestions]
+  );
 
   const setScore = (sectorIdx, qid, val) => {
     setScores((prev) => ({ ...prev, [`${sectorIdx}-${qid}`]: val }));
@@ -78,7 +87,6 @@ export default function NuovoAudit() {
   };
 
   const totalAnswered = Object.keys(scores).length;
-  const totalQuestions = sectors.length * questions.length;
   const totalCriticita = Object.entries(scores).filter(([_, v]) => v < threshold).length;
   const criticityMissingComment = Object.entries(scores).filter(([k, v]) => v < threshold && !(comments[k] && comments[k].trim().length > 0)).length;
 
@@ -120,8 +128,9 @@ export default function NuovoAudit() {
     const newCriticita = Object.entries(scores)
       .filter(([_, v]) => v < threshold)
       .map(([key, val], idx) => {
-        const [sIdx, qid] = key.split('-');
-        const sector = sectors[parseInt(sIdx, 10)];
+        const [sIdx, ...qidParts] = key.split('-');
+        const qid = qidParts.join('-');
+        const sector = sectorsWithQuestions[parseInt(sIdx, 10)]?.name || '';
         return {
           id: `crit-${Date.now()}-${idx}`,
           area,
@@ -150,27 +159,27 @@ export default function NuovoAudit() {
       : 0;
     // Build sectorScores: { sectorName: { qid: score, ... } }
     const sectorScores = {};
-    sectors.forEach((sec, sIdx) => {
+    sectorsWithQuestions.forEach((secObj, sIdx) => {
       const sec_scores = {};
-      questions.forEach((q) => {
+      secObj.questions.forEach((q) => {
         const v = scores[`${sIdx}-${q.id}`];
         if (v !== undefined) sec_scores[q.id] = v;
       });
-      sectorScores[sec] = sec_scores;
+      sectorScores[secObj.name] = sec_scores;
     });
     // Build sectorComments and sectorPhotos similarly
     const sectorComments = {};
     const sectorPhotos = {};
-    sectors.forEach((sec, sIdx) => {
+    sectorsWithQuestions.forEach((secObj, sIdx) => {
       const sc = {};
       const sp = {};
-      questions.forEach((q) => {
+      secObj.questions.forEach((q) => {
         const k = `${sIdx}-${q.id}`;
         if (comments[k]) sc[q.id] = comments[k];
         if (photos[k]) sp[q.id] = photos[k];
       });
-      sectorComments[sec] = sc;
-      sectorPhotos[sec] = sp;
+      sectorComments[secObj.name] = sc;
+      sectorPhotos[secObj.name] = sp;
     });
 
     addAudit(mode, {
@@ -271,18 +280,21 @@ export default function NuovoAudit() {
       </div>
 
       {/* Sectors */}
-      {area && sectors.length > 0 && (
+      {area && sectorsWithQuestions.length > 0 && (
         <div className="space-y-4">
-          {sectors.map((sector, sIdx) => (
-            <div key={sector} className="bg-white rounded-xl border border-gray-200/80 shadow-sm overflow-hidden">
+          {sectorsWithQuestions.map((secObj, sIdx) => (
+            <div key={secObj.name} className="bg-white rounded-xl border border-gray-200/80 shadow-sm overflow-hidden">
               <div className="flex items-center gap-3 px-5 py-4 border-b border-gray-100">
                 <div className="w-9 h-9 rounded-lg flex items-center justify-center" style={{ backgroundColor: AREA_COLORS[area].soft }}>
                   <Building2 className="w-4 h-4" style={{ color: AREA_COLORS[area].accent }} />
                 </div>
-                <h3 className="font-semibold text-gray-900 text-[15px]">{sector}</h3>
+                <h3 className="font-semibold text-gray-900 text-[15px]">{secObj.name}</h3>
+                <span className="ml-auto text-[11px] text-gray-400">{secObj.questions.length} domande</span>
               </div>
               <div>
-                {questions.map((q, qIdx) => {
+                {secObj.questions.length === 0 ? (
+                  <div className="px-5 py-6 text-center text-sm text-gray-400 italic">Nessuna domanda configurata per questo reparto</div>
+                ) : secObj.questions.map((q, qIdx) => {
                   const key = `${sIdx}-${q.id}`;
                   const sel = scores[key];
                   const isCritical = sel !== undefined && sel < threshold;
@@ -292,7 +304,7 @@ export default function NuovoAudit() {
                     <div key={q.id} className={`px-5 py-4 ${qIdx > 0 ? 'border-t border-gray-100' : ''} ${isCritical ? 'bg-red-50/40' : ''}`}>
                       <div className="flex items-start gap-6">
                         <div className="flex-1 min-w-0">
-                          <div className="text-xs font-semibold text-gray-400 tracking-wider">{q.id}</div>
+                          <div className="text-xs font-semibold text-gray-400 tracking-wider">{q.code || q.id}</div>
                           <div className="text-[13.5px] text-gray-700 mt-1 leading-relaxed">{q.text}</div>
                         </div>
                         <div className="flex gap-2 shrink-0">
