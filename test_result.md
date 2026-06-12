@@ -101,3 +101,111 @@
 #====================================================================================================
 # Testing Data - Main Agent and testing sub agent both should log testing data below this section
 #====================================================================================================
+
+user_problem_statement: "Housekeeping & Food Defense API - Authentication System"
+
+backend:
+  - task: "User Registration - Owner Role"
+    implemented: true
+    working: true
+    file: "/app/backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "testing"
+        comment: "✅ POST /api/auth/register successfully creates owner account. Email 'poltronieri.manuel@gmail.com' correctly assigned role='owner'. Returns 200 with valid JWT token and user object."
+  
+  - task: "User Registration - Operator Role"
+    implemented: true
+    working: true
+    file: "/app/backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "testing"
+        comment: "✅ POST /api/auth/register successfully creates operator account. Non-owner emails correctly assigned role='operator'. Returns 200 with valid JWT token and user object."
+  
+  - task: "User Registration - Duplicate Email Validation"
+    implemented: true
+    working: true
+    file: "/app/backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "testing"
+        comment: "✅ POST /api/auth/register correctly rejects duplicate email registration. Returns 400 with detail 'Email già registrata'."
+  
+  - task: "User Login - Valid Credentials"
+    implemented: true
+    working: true
+    file: "/app/backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "testing"
+        comment: "✅ POST /api/auth/login successfully authenticates user with valid credentials. Returns 200 with JWT token and correct user role. Password verification working correctly with bcrypt."
+  
+  - task: "User Login - Invalid Credentials"
+    implemented: true
+    working: true
+    file: "/app/backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "testing"
+        comment: "✅ POST /api/auth/login correctly rejects invalid password. Returns 401 with detail 'Credenziali non valide'."
+  
+  - task: "Get Current User - With Valid Token"
+    implemented: true
+    working: true
+    file: "/app/backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "testing"
+        comment: "✅ GET /api/auth/me successfully returns user info when valid Bearer token provided. Returns 200 with user id, email, name, and role."
+  
+  - task: "Get Current User - Without Token"
+    implemented: true
+    working: true
+    file: "/app/backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "testing"
+        comment: "✅ GET /api/auth/me correctly rejects requests without Authorization header. Returns 401 with detail 'Token mancante'."
+
+frontend:
+  # No frontend testing performed as per instructions
+
+metadata:
+  created_by: "testing_agent"
+  version: "1.0"
+  test_sequence: 1
+  run_ui: false
+  last_test_date: "2026-06-12"
+
+test_plan:
+  current_focus:
+    - "All authentication endpoints tested and working"
+  stuck_tasks: []
+  test_all: false
+  test_priority: "high_first"
+
+agent_communication:
+  - agent: "testing"
+    message: "Completed comprehensive authentication API testing. All 7 test scenarios passed successfully. Backend authentication system is fully functional with proper role assignment (owner/operator), duplicate email validation, password verification, JWT token generation, and protected endpoint access control. Test credentials documented in /app/memory/test_credentials.md. Backend service running on https://cleaning-connect-10.preview.emergentagent.com/api with all /api prefixed routes working correctly."
