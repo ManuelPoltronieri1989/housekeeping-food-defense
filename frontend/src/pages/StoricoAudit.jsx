@@ -97,15 +97,12 @@ const buildSchedaData = (audit) => {
   const sectorsData = reparti.map((sector) => {
     const userScores = hasUserScores ? audit.sectorScores[sector] || {} : {};
     const userComments = audit.sectorComments?.[sector] || {};
-    const userPhotos = audit.sectorPhotos?.[sector] || {};
     const qResults = questions.map((q) => {
       let v;
       let comment = null;
-      let photo = null;
       if (hasUserScores && userScores[q.id] !== undefined) {
         v = userScores[q.id];
         comment = userComments[q.id] || null;
-        photo = userPhotos[q.id] || null;
       } else {
         const variance = (rand() - 0.5) * 1.4;
         v = Math.round(target + variance);
@@ -119,7 +116,6 @@ const buildSchedaData = (audit) => {
         score: v,
         critical: isCrit,
         commento: comment || (isCrit ? `Verificare ${sector.toLowerCase()}, riscontrate anomalie da approfondire. Richiesto intervento correttivo.` : null),
-        photo,
       };
     });
     return { name: sector, results: qResults };
@@ -195,11 +191,6 @@ const SchedaDialog = ({ audit, onClose }) => {
                           <AlertTriangle className="w-3.5 h-3.5 text-red-600 mt-0.5 shrink-0" />
                           <div className="text-[12px] text-gray-700 leading-relaxed">{r.commento}</div>
                         </div>
-                      )}
-                      {r.photo && (
-                        <a href={r.photo} target="_blank" rel="noopener noreferrer" className="mt-2 inline-block">
-                          <img src={r.photo} alt="Foto" className="h-20 rounded-md border border-gray-200 shadow-sm hover:opacity-95" />
-                        </a>
                       )}
                     </div>
                     <div className={`shrink-0 w-12 h-12 rounded-lg flex items-center justify-center text-[16px] font-bold ${
