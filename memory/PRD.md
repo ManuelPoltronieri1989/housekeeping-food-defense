@@ -43,9 +43,8 @@ Italian (it-IT) — sempre rispondere all'utente in italiano.
   - Dipendenza aggiunta: `xlsx` (SheetJS)
 
 - [DONE] **(2026-02-19)** Dashboard refactor:
+  - Rimossa card KPI "Trend" (in alto)
   - Rimossa sezione "Punteggi per Area e Reparto"
-  - Aggiunta sezione "Media Settimanale per Area" (tabella: righe=aree, colonne=settimane dalla più recente, celle=media punteggi)
-  - Media generale (ø) accanto al nome di ogni area, valori sotto soglia evidenziati in rosso
 ## Endpoint API completi
 - `POST /api/auth/register` — registrazione (operator default, owner se email = OWNER_EMAIL)
 - `POST /api/auth/login`
