@@ -590,23 +590,85 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* Punteggi per Area e Reparto */}
-      <div className="bg-white rounded-xl border border-gray-200/80 shadow-sm overflow-hidden">
-        <div className="px-5 py-4 flex items-center justify-between border-b border-gray-100">
-          <h3 className="font-semibold text-gray-900 text-[15px]">Punteggi per Area e Reparto</h3>
-          <button
-            onClick={() => setCompactReparti(!compactReparti)}
-            className="flex items-center gap-2 px-3 h-8 text-xs font-medium border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
-          >
-            <Minus className="w-3.5 h-3.5" />
-            {compactReparti ? 'Espandi' : 'Compatta'}
-          </button>
+      {/* Media Settimanale per Area */}
+      <div className="bg-white rounded-xl border border-gray-200/80 shadow-sm overflow-hidden" data-testid="weekly-avg-per-area">
+        <div className="px-5 py-4 border-b border-gray-100">
+          <h3 className="font-semibold text-gray-900 text-[15px]">Media Settimanale per Area</h3>
+          <p className="text-[12px] text-gray-500 mt-0.5">
+            Media dei punteggi {mode === 'safety' ? 'Safety' : 'Quality'} per ogni area, settimana per settimana (dalla più recente).
+          </p>
         </div>
-        <div>
-          {AREA_ORDER.map((area) => (
-            <AreaAccordion key={`${area}-${compactReparti}`} name={area} data={REPARTI_SCORES[area]} defaultOpen={!compactReparti} />
-          ))}
-        </div>
+        {(() => {
+          const lastWeeks = realWeeklyTrend.slice(-12).reverse(); // up to 12 most recent weeks, newest first
+          if (lastWeeks.length === 0) {
+            return (
+              <div className="px-5 py-8 text-center text-sm text-gray-500">
+                Nessun audit registrato.
+              </div>
+            );
+          }
+          return (
+            <div className="overflow-x-auto">
+              <table className="w-full text-[12px]">
+                <thead className="bg-gray-50 text-gray-600">
+                  <tr>
+                    <th className="text-left px-4 py-2.5 font-semibold sticky left-0 bg-gray-50 z-10 min-w-[140px]">Area</th>
+                    {lastWeeks.map((w) => (
+                      <th key={`${w.yr}-${w.wkNum}`} className="text-center px-3 py-2.5 font-semibold whitespace-nowrap">
+                        <div>w{w.wkNum}</div>
+                        <div className="text-[10px] font-normal text-gray-400">{w.yr}</div>
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {AREA_ORDER.map((area) => {
+                    const accent = AREA_COLORS[area]?.accent || '#9ca3af';
+                    // Compute overall average across the visible weeks for this area
+                    const vals = lastWeeks.map((w) => w[area]).filter((v) => typeof v === 'number');
+                    const overall = vals.length ? +(vals.reduce((s, v) => s + v, 0) / vals.length).toFixed(2) : null;
+                    return (
+                      <tr key={area} className="border-t border-gray-100 hover:bg-gray-50/60">
+                        <td className="px-4 py-2 sticky left-0 bg-white z-10">
+                          <div className="flex items-center gap-2">
+                            <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: accent }} />
+                            <span className="font-medium text-gray-800">{area}</span>
+                            {overall !== null && (
+                              <span className="ml-1 text-[10px] font-semibold text-gray-400">
+                                ø {overall.toFixed(2)}
+                              </span>
+                            )}
+                          </div>
+                        </td>
+                        {lastWeeks.map((w) => {
+                          const v = w[area];
+                          const max = mode === 'safety' ? 3 : 5;
+                          const below = typeof v === 'number' && v < (mode === 'safety' ? 2 : 3);
+                          return (
+                            <td key={`${area}-${w.yr}-${w.wkNum}`} className="text-center px-3 py-2 whitespace-nowrap">
+                              {typeof v === 'number' ? (
+                                <span
+                                  className={`inline-block px-1.5 py-0.5 rounded text-[11px] font-semibold ${
+                                    below ? 'bg-red-50 text-red-700 border border-red-200' : 'text-gray-700'
+                                  }`}
+                                  title={`${v.toFixed(2)} / ${max}`}
+                                >
+                                  {v.toFixed(2)}
+                                </span>
+                              ) : (
+                                <span className="text-gray-300">—</span>
+                              )}
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          );
+        })()}
       </div>
     </div>
   );
