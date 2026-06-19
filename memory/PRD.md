@@ -34,6 +34,13 @@ Italian (it-IT) — sempre rispondere all'utente in italiano.
   - `POST /api/criticita/{id}/resolve|unresolve|dismiss`
   - `GET/PUT /api/config/questions` — config domande (PUT solo Owner, 403 per Operator)
 - [DONE] Migrazione one-time automatica al primo login: dati localStorage → backend, flag `hk_migrated_to_backend_v1`
+- [DONE] **(2026-02-19)** Ordinamento domande in Configurazione: ora ordinate per Area (secondo AREA_ORDER) → Reparto → Codice
+- [DONE] **(2026-02-19)** Import domande da Excel/CSV in Configurazione:
+  - Bottone "Importa Excel/CSV" + dialog di preview con valide/scartate
+  - Formato: `Codice | Testo Domanda | Area | Reparto | Tipo (Safety/Quality)`
+  - Codice opzionale (auto-generato se vuoto)
+  - Salvataggio su MongoDB via PUT /api/config/questions
+  - Dipendenza aggiunta: `xlsx` (SheetJS)
 
 ## Endpoint API completi
 - `POST /api/auth/register` — registrazione (operator default, owner se email = OWNER_EMAIL)

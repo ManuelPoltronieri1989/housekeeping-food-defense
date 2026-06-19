@@ -1,5 +1,6 @@
-import React, { useState, useMemo, useEffect } from 'react';
-import { MapPin, Building2, HelpCircle, Plus, Pencil, Trash2, Shield, Star } from 'lucide-react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
+import { MapPin, Building2, HelpCircle, Plus, Pencil, Trash2, Shield, Star, Upload, FileSpreadsheet, CheckCircle2, AlertTriangle } from 'lucide-react';
+import * as XLSX from 'xlsx';
 import { toast } from 'sonner';
 import {
   AREA_ORDER, AREA_COLORS, AREAS_REPARTI,
@@ -265,8 +266,23 @@ function DomandeTab() {
     let l = questions[mode];
     if (filterArea !== 'all') l = l.filter((q) => q.area === filterArea);
     if (filterReparto !== 'all') l = l.filter((q) => q.reparto === filterReparto);
-    // Ordina per codice (Q001, Q002, ... oppure S001, S002, ...)
-    l = [...l].sort((a, b) => String(a.code || '').localeCompare(String(b.code || ''), undefined, { numeric: true, sensitivity: 'base' }));
+    // Ordina per Area (secondo AREA_ORDER), poi Reparto, poi Codice
+    const areaIdx = (a) => {
+      const i = AREA_ORDER.indexOf(a);
+      return i === -1 ? 999 : i;
+    };
+    const repartoIdx = (area, reparto) => {
+      const reps = AREAS_REPARTI[area] || [];
+      const i = reps.indexOf(reparto);
+      return i === -1 ? 999 : i;
+    };
+    l = [...l].sort((a, b) => {
+      const da = areaIdx(a.area) - areaIdx(b.area);
+      if (da !== 0) return da;
+      const dr = repartoIdx(a.area, a.reparto) - repartoIdx(b.area, b.reparto);
+      if (dr !== 0) return dr;
+      return String(a.code || '').localeCompare(String(b.code || ''), undefined, { numeric: true, sensitivity: 'base' });
+    });
     return l;
   }, [questions, mode, filterArea, filterReparto]);
 
@@ -299,6 +315,85 @@ function DomandeTab() {
     setQuestions((p) => ({ ...p, [mode]: p[mode].filter((x) => x.id !== deleting.id) }));
     toast.success('Domanda eliminata');
     setDeleting(null);
+  };
+
+  // ===== IMPORT EXCEL/CSV =====
+  const fileInputRef = useRef(null);
+  const [importPreview, setImportPreview] = useState(null); // { valid: [], invalid: [], total }
+
+  const normalizeKey = (s) => String(s || '').trim().toLowerCase().replace(/[._\s-]+/g, '');
+  const getField = (row, candidates) => {
+    for (const c of candidates) {
+      for (const k of Object.keys(row)) {
+        if (normalizeKey(k) === normalizeKey(c)) return row[k];
+      }
+    }
+    return undefined;
+  };
+
+  const handleFileSelected = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    try {
+      const buf = await file.arrayBuffer();
+      const wb = XLSX.read(buf, { type: 'array' });
+      const sheet = wb.Sheets[wb.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json(sheet, { defval: '' });
+      if (!rows.length) { toast.error('Il file è vuoto o privo di intestazioni'); return; }
+
+      const valid = [];
+      const invalid = [];
+      rows.forEach((r, idx) => {
+        const code = String(getField(r, ['codice', 'code']) || '').trim();
+        const text = String(getField(r, ['testo domanda', 'testo', 'domanda', 'text']) || '').trim();
+        const area = String(getField(r, ['area']) || '').trim();
+        const reparto = String(getField(r, ['reparto']) || '').trim();
+        const tipoRaw = String(getField(r, ['tipo', 'type']) || '').trim().toLowerCase();
+        const tipo = tipoRaw.startsWith('s') ? 'Safety' : tipoRaw.startsWith('q') ? 'Quality' : '';
+
+        const errors = [];
+        if (!text) errors.push('Testo mancante');
+        if (!area) errors.push('Area mancante');
+        if (!reparto) errors.push('Reparto mancante');
+        if (!tipo) errors.push("Tipo deve essere 'Safety' o 'Quality'");
+
+        if (errors.length) {
+          invalid.push({ row: idx + 2, code, text, area, reparto, tipo: tipoRaw, errors });
+        } else {
+          valid.push({ code, text, area, reparto, tipo });
+        }
+      });
+
+      setImportPreview({ valid, invalid, total: rows.length, filename: file.name });
+    } catch (err) {
+      console.warn(err);
+      toast.error('Impossibile leggere il file (formato non valido)');
+    }
+  };
+
+  const confirmImport = () => {
+    if (!importPreview || importPreview.valid.length === 0) return;
+    // Group by tipo (Safety/Quality)
+    const bySafety = [];
+    const byQuality = [];
+    importPreview.valid.forEach((v, i) => {
+      const q = {
+        id: `imp-${Date.now()}-${i}`,
+        code: v.code || (v.tipo === 'Safety' ? `S${String(i + 1).padStart(3, '0')}` : `Q${String(i + 1).padStart(3, '0')}`),
+        text: v.text,
+        area: v.area,
+        reparto: v.reparto,
+        enabled: true,
+      };
+      if (v.tipo === 'Safety') bySafety.push(q); else byQuality.push(q);
+    });
+    setQuestions((p) => ({
+      Safety: [...bySafety, ...p.Safety],
+      Quality: [...byQuality, ...p.Quality],
+    }));
+    toast.success(`${importPreview.valid.length} domande importate (Safety: ${bySafety.length} · Quality: ${byQuality.length})`);
+    setImportPreview(null);
   };
 
   return (
@@ -339,8 +434,23 @@ function DomandeTab() {
         </Select>
       </div>
 
-      <div className="flex justify-end">
-        <button onClick={openNew} className={`flex items-center gap-2 px-4 h-10 text-white text-sm font-medium rounded-lg shadow-sm ${
+      <div className="flex justify-end gap-2">
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept=".xlsx,.xls,.csv"
+          className="hidden"
+          onChange={handleFileSelected}
+          data-testid="import-file-input"
+        />
+        <button
+          onClick={() => fileInputRef.current?.click()}
+          data-testid="import-excel-btn"
+          className="flex items-center gap-2 px-4 h-10 bg-white border border-gray-300 hover:border-gray-400 text-gray-700 text-sm font-medium rounded-lg shadow-sm transition-colors"
+        >
+          <Upload className="w-4 h-4" /> Importa Excel/CSV
+        </button>
+        <button onClick={openNew} data-testid="new-question-btn" className={`flex items-center gap-2 px-4 h-10 text-white text-sm font-medium rounded-lg shadow-sm ${
           mode === 'Safety' ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-amber-600 hover:bg-amber-700'
         }`}>
           <Plus className="w-4 h-4" /> Nuova Domanda {mode}
@@ -425,6 +535,118 @@ function DomandeTab() {
           <DialogFooter>
             <button onClick={() => setDeleting(null)} className="px-4 h-9 text-sm font-medium border border-gray-200 rounded-lg hover:bg-gray-50">Annulla</button>
             <button onClick={confirmDel} className="px-4 h-9 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-lg">Elimina</button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Import preview dialog */}
+      <Dialog open={!!importPreview} onOpenChange={(v) => { if (!v) setImportPreview(null); }}>
+        <DialogContent className="max-w-3xl max-h-[85vh] overflow-hidden flex flex-col">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <FileSpreadsheet className="w-5 h-5 text-emerald-600" />
+              Anteprima Import
+            </DialogTitle>
+            <DialogDescription>
+              {importPreview && (
+                <>File: <span className="font-medium text-gray-700">{importPreview.filename}</span> · {importPreview.total} righe totali</>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          {importPreview && (
+            <div className="space-y-4 overflow-y-auto">
+              <div className="grid grid-cols-2 gap-3">
+                <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 flex items-center gap-3">
+                  <CheckCircle2 className="w-5 h-5 text-emerald-600" />
+                  <div>
+                    <div className="text-[11px] font-semibold uppercase tracking-wider text-emerald-700">Valide</div>
+                    <div className="text-xl font-bold text-emerald-700" data-testid="import-valid-count">{importPreview.valid.length}</div>
+                  </div>
+                </div>
+                <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 flex items-center gap-3">
+                  <AlertTriangle className="w-5 h-5 text-amber-600" />
+                  <div>
+                    <div className="text-[11px] font-semibold uppercase tracking-wider text-amber-700">Scartate</div>
+                    <div className="text-xl font-bold text-amber-700" data-testid="import-invalid-count">{importPreview.invalid.length}</div>
+                  </div>
+                </div>
+              </div>
+
+              {importPreview.valid.length > 0 && (
+                <div>
+                  <div className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-2">Domande valide (max 50 mostrate)</div>
+                  <div className="rounded-lg border border-gray-200 overflow-hidden">
+                    <table className="w-full text-[12px]">
+                      <thead className="bg-gray-50 text-gray-600">
+                        <tr>
+                          <th className="text-left px-3 py-2 font-semibold">Codice</th>
+                          <th className="text-left px-3 py-2 font-semibold">Testo</th>
+                          <th className="text-left px-3 py-2 font-semibold">Area</th>
+                          <th className="text-left px-3 py-2 font-semibold">Reparto</th>
+                          <th className="text-left px-3 py-2 font-semibold">Tipo</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {importPreview.valid.slice(0, 50).map((v, i) => (
+                          <tr key={i} className="border-t border-gray-100">
+                            <td className="px-3 py-1.5 font-mono text-gray-500">{v.code || '—'}</td>
+                            <td className="px-3 py-1.5 text-gray-800 max-w-[300px] truncate" title={v.text}>{v.text}</td>
+                            <td className="px-3 py-1.5 text-gray-700">{v.area}</td>
+                            <td className="px-3 py-1.5 text-gray-700">{v.reparto}</td>
+                            <td className="px-3 py-1.5">
+                              <span className={`px-1.5 py-0.5 rounded text-[10.5px] font-semibold ${v.tipo === 'Safety' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>{v.tipo}</span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              {importPreview.invalid.length > 0 && (
+                <div>
+                  <div className="text-[11px] font-semibold text-amber-700 uppercase tracking-wider mb-2">Righe scartate</div>
+                  <div className="rounded-lg border border-amber-200 bg-amber-50/40 overflow-hidden">
+                    <table className="w-full text-[12px]">
+                      <thead className="bg-amber-50 text-amber-800">
+                        <tr>
+                          <th className="text-left px-3 py-2 font-semibold w-12">Riga</th>
+                          <th className="text-left px-3 py-2 font-semibold">Errore</th>
+                          <th className="text-left px-3 py-2 font-semibold">Dati</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {importPreview.invalid.slice(0, 20).map((v, i) => (
+                          <tr key={i} className="border-t border-amber-100">
+                            <td className="px-3 py-1.5 text-amber-700 font-mono">{v.row}</td>
+                            <td className="px-3 py-1.5 text-amber-800">{v.errors.join(' · ')}</td>
+                            <td className="px-3 py-1.5 text-gray-600 truncate max-w-[280px]">
+                              {[v.code, v.text, v.area, v.reparto, v.tipo].filter(Boolean).join(' | ') || '—'}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              <div className="rounded-lg bg-gray-50 border border-gray-200 p-3 text-[12px] text-gray-600 leading-relaxed">
+                <span className="font-semibold text-gray-700">Formato atteso:</span> colonne <code className="px-1 py-0.5 bg-white rounded">Codice</code> · <code className="px-1 py-0.5 bg-white rounded">Testo Domanda</code> · <code className="px-1 py-0.5 bg-white rounded">Area</code> · <code className="px-1 py-0.5 bg-white rounded">Reparto</code> · <code className="px-1 py-0.5 bg-white rounded">Tipo</code> (Safety o Quality). Il codice è opzionale (generato automaticamente se vuoto).
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <button onClick={() => setImportPreview(null)} data-testid="import-cancel-btn" className="px-4 h-9 text-sm font-medium border border-gray-200 rounded-lg hover:bg-gray-50">Annulla</button>
+            <button
+              onClick={confirmImport}
+              disabled={!importPreview || importPreview.valid.length === 0}
+              data-testid="import-confirm-btn"
+              className="px-4 h-9 text-sm font-medium text-white bg-emerald-600 hover:bg-emerald-700 disabled:bg-gray-300 disabled:cursor-not-allowed rounded-lg"
+            >
+              Importa {importPreview?.valid.length || 0} domande
+            </button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
