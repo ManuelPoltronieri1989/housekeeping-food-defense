@@ -45,6 +45,12 @@ Italian (it-IT) — sempre rispondere all'utente in italiano.
 - [DONE] **(2026-02-19)** Dashboard refactor:
   - Rimossa card KPI "Trend" (in alto)
   - Rimossa sezione "Punteggi per Area e Reparto"
+  - Card "Criticità" semplificata: solo numero + testo riassuntivo (lista dettagliata rimossa, evidenze già visibili in Storico Segnalazioni)
+- [DONE] **(2026-02-19)** Storico Audit — scheda dettaglio:
+  - Ora mostra le domande REALI inserite e valutate (lette da `audit.sectorScores` + lookup testo da `configQuestions`)
+  - Rimosso l'uso dei mock `SAFETY_QUESTIONS`/`QUALITY_QUESTIONS` come fonte di domande
+  - Mostrato il `code` della domanda (es. "S001") invece dell'id interno
+  - Fallback "Nessun dettaglio per-domanda disponibile" per audit storici senza sectorScores
 ## Endpoint API completi
 - `POST /api/auth/register` — registrazione (operator default, owner se email = OWNER_EMAIL)
 - `POST /api/auth/login`

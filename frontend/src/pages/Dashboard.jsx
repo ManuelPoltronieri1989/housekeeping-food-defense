@@ -52,7 +52,7 @@ const StatCard = ({ label, value, sub, Icon, iconBg, iconColor }) => (
   </div>
 );
 
-const CriticitaCard = ({ count, sub, items }) => {
+const CriticitaCard = ({ count, sub }) => {
   const isAlert = count > 0;
   return (
     <div className={`rounded-xl border p-5 shadow-sm hover:shadow-md transition-shadow duration-200 ${
@@ -68,27 +68,6 @@ const CriticitaCard = ({ count, sub, items }) => {
           <AlertTriangle className={`w-5 h-5 ${isAlert ? 'text-red-600' : 'text-emerald-600'}`} strokeWidth={2} />
         </div>
       </div>
-      {isAlert && items && items.length > 0 && (
-        <div className="mt-3 pt-3 border-t border-red-200/70 space-y-2.5 max-h-[220px] overflow-y-auto pr-1">
-          {items.slice(0, 3).map((it, i) => {
-            const c = AREA_COLORS[it.area];
-            return (
-              <div key={i} className="space-y-1.5">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="px-2 py-0.5 rounded-md text-[11px] font-semibold" style={{ background: c?.light, color: c?.text }}>{it.area}</span>
-                  <span className="text-[11px] text-gray-500">› {it.reparto}</span>
-                  <span className="ml-auto text-[11px] font-bold text-red-700 bg-red-100 px-2 py-0.5 rounded-full">{it.score}</span>
-                </div>
-                <div className="text-[12px] text-gray-700 leading-relaxed">{it.commento}</div>
-                {it.inspector && <div className="text-[10.5px] text-gray-500">— {it.inspector}</div>}
-              </div>
-            );
-          })}
-          {items.length > 3 && (
-            <div className="text-[11px] font-semibold text-red-700 pt-1">+ {items.length - 3} altre criticità</div>
-          )}
-        </div>
-      )}
     </div>
   );
 };

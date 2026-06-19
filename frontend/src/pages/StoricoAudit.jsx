@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { Shield, Star, ChevronUp, ChevronDown, Eye, Pencil, Trash2, Search, X, Save, Building2, AlertTriangle, Check } from 'lucide-react';
 import { toast } from 'sonner';
-import { AUDIT_HISTORY_TOTAL, AREA_COLORS, AREA_ORDER, AREAS_REPARTI, SAFETY_QUESTIONS, QUALITY_QUESTIONS } from '../mock';
+import { AUDIT_HISTORY_TOTAL, AREA_COLORS, AREA_ORDER, AREAS_REPARTI } from '../mock';
 import { useAudit } from '../context/AuditContext';
 import { Input } from '../components/ui/input';
 import {
@@ -75,56 +75,54 @@ const WeekGroup = ({ group, defaultOpen = false, onView, onEdit, onDelete }) => 
   );
 };
 
-// Deterministic "scheda" generation; uses real per-question scores when available
-const buildSchedaData = (audit) => {
+// Build "scheda" data using the user's actual scored questions + current configuration for text lookups
+const buildSchedaData = (audit, configQuestions) => {
   const isSafety = audit.type === 'Safety';
-  const questions = isSafety ? SAFETY_QUESTIONS : QUALITY_QUESTIONS;
+  const typeKey = isSafety ? 'Safety' : 'Quality';
+  const cfgList = (configQuestions?.[typeKey] || []).filter((q) => q.area === audit.area);
+  const cfgById = {};
+  cfgList.forEach((q) => { cfgById[q.id] = q; });
+
   const maxS = isSafety ? 3 : 5;
-  const minS = isSafety ? 0 : 1;
   const threshold = isSafety ? 2 : 3;
-  const reparti = (AREAS_REPARTI[audit.area] || ['Reparto principale']);
-  const target = audit.score;
 
-  // Deterministic pseudo-random per audit (stable across renders)
-  const idStr = String(audit.id || '');
-  let seed = 0;
-  for (let i = 0; i < idStr.length; i++) seed = (seed * 31 + idStr.charCodeAt(i)) & 0xffffffff;
-  seed = Math.abs(seed) || 1;
-  const rand = () => { seed = (seed * 9301 + 49297) % 233280; return seed / 233280; };
+  const userScores = audit.sectorScores || {};
+  const userComments = audit.sectorComments || {};
 
-  const hasUserScores = !!audit.sectorScores;
+  // Sectors = reparti where the user actually scored at least one question
+  const sectorNames = Object.keys(userScores).filter((s) => userScores[s] && Object.keys(userScores[s]).length > 0);
 
-  const sectorsData = reparti.map((sector) => {
-    const userScores = hasUserScores ? audit.sectorScores[sector] || {} : {};
-    const userComments = audit.sectorComments?.[sector] || {};
-    const qResults = questions.map((q) => {
-      let v;
-      let comment = null;
-      if (hasUserScores && userScores[q.id] !== undefined) {
-        v = userScores[q.id];
-        comment = userComments[q.id] || null;
-      } else {
-        const variance = (rand() - 0.5) * 1.4;
-        v = Math.round(target + variance);
-        if (v > maxS) v = maxS;
-        if (v < minS) v = minS;
-      }
+  const sectorsData = sectorNames.map((sector) => {
+    const scoresForSector = userScores[sector] || {};
+    const commentsForSector = userComments[sector] || {};
+    // Preserve config ordering for this sector (by code), fall back to insertion order
+    const sortedIds = Object.keys(scoresForSector).sort((a, b) => {
+      const ca = cfgById[a]?.code || '';
+      const cb = cfgById[b]?.code || '';
+      return String(ca).localeCompare(String(cb), undefined, { numeric: true, sensitivity: 'base' });
+    });
+    const qResults = sortedIds.map((qid) => {
+      const v = scoresForSector[qid];
+      const cfg = cfgById[qid];
+      const comment = commentsForSector[qid] || null;
       const isCrit = v < threshold;
       return {
-        id: q.id,
-        text: q.text,
+        id: qid,
+        text: cfg?.text || `Domanda ${qid}`,
+        code: cfg?.code || '',
         score: v,
         critical: isCrit,
-        commento: comment || (isCrit ? `Verificare ${sector.toLowerCase()}, riscontrate anomalie da approfondire. Richiesto intervento correttivo.` : null),
+        commento: comment || (isCrit ? `Anomalia riscontrata in ${sector.toLowerCase()}. Richiesto intervento correttivo.` : null),
       };
     });
     return { name: sector, results: qResults };
   });
-  return { sectorsData, maxS, minS, threshold };
+  return { sectorsData, maxS, threshold };
 };
 
 const SchedaDialog = ({ audit, onClose }) => {
-  const data = useMemo(() => (audit ? buildSchedaData(audit) : null), [audit]);
+  const { configQuestions } = useAudit();
+  const data = useMemo(() => (audit ? buildSchedaData(audit, configQuestions) : null), [audit, configQuestions]);
   if (!audit || !data) return null;
   const c = AREA_COLORS[audit.area];
   const totalQ = data.sectorsData.reduce((s, x) => s + x.results.length, 0);
@@ -172,6 +170,11 @@ const SchedaDialog = ({ audit, onClose }) => {
 
         {/* Sectors */}
         <div className="space-y-3 mt-2">
+          {data.sectorsData.length === 0 && (
+            <div className="rounded-xl border border-gray-200/80 bg-gray-50 px-4 py-6 text-center text-[13px] text-gray-500">
+              Nessun dettaglio per-domanda disponibile per questo audit.
+            </div>
+          )}
           {data.sectorsData.map((sec) => (
             <div key={sec.name} className="bg-white rounded-xl border border-gray-200/80 overflow-hidden">
               <div className="flex items-center gap-3 px-4 py-3 border-b border-gray-100">
@@ -184,7 +187,7 @@ const SchedaDialog = ({ audit, onClose }) => {
                 <div key={r.id} className={`px-4 py-3 ${i > 0 ? 'border-t border-gray-100' : ''} ${r.critical ? 'bg-red-50/40' : ''}`}>
                   <div className="flex items-start gap-4">
                     <div className="flex-1 min-w-0">
-                      <div className="text-[10.5px] font-semibold text-gray-400 tracking-wider">{r.id}</div>
+                      <div className="text-[10.5px] font-semibold text-gray-400 tracking-wider">{r.code || r.id}</div>
                       <div className="text-[13px] text-gray-700 mt-0.5 leading-relaxed">{r.text}</div>
                       {r.critical && r.commento && (
                         <div className="mt-2 rounded-md border border-red-200 bg-white px-3 py-2 flex items-start gap-2">
