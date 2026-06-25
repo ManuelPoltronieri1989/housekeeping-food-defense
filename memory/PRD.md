@@ -51,6 +51,11 @@ Italian (it-IT) — sempre rispondere all'utente in italiano.
   - Rimosso l'uso dei mock `SAFETY_QUESTIONS`/`QUALITY_QUESTIONS` come fonte di domande
   - Mostrato il `code` della domanda (es. "S001") invece dell'id interno
   - Fallback "Nessun dettaglio per-domanda disponibile" per audit storici senza sectorScores
+- [DONE] **(2026-02-25)** Dashboard — nuove funzionalità:
+  - Badge **percentuale di conversione** accanto al Punteggio Medio (verde ≥80, ambra ≥60, rosso <60) — funziona sia Safety (/3) che Quality (/5)
+  - Nuovo grafico **"Andamento Mensile per Area"** (line chart per area, aggregazione mensile da auditHistory + userAudits)
+  - Bottone **"Esporta PDF"** nell'header con qualità 2x: cattura tutta la dashboard via html2canvas e genera PDF multi-pagina A4 con jsPDF
+  - Dipendenze aggiunte: `html2canvas`, `jspdf`
 ## Endpoint API completi
 - `POST /api/auth/register` — registrazione (operator default, owner se email = OWNER_EMAIL)
 - `POST /api/auth/login`

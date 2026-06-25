@@ -1,12 +1,15 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import {
-  Shield, ClipboardCheck, TrendingUp, AlertTriangle,
-  ChevronDown, ChevronUp, Minus, ArrowDown, ArrowUp
+  Shield, ClipboardCheck, AlertTriangle,
+  ChevronDown, ChevronUp, Minus, ArrowDown, ArrowUp, Download, Loader2
 } from 'lucide-react';
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, ReferenceLine, Legend
 } from 'recharts';
+import html2canvas from 'html2canvas';
+import jsPDF from 'jspdf';
+import { toast } from 'sonner';
 import ModeToggle from '../components/ModeToggle';
 import {
   AREA_COLORS, REPARTI_SCORES, AREA_ORDER, MEDIA_PER_AREA_ORDER,
@@ -37,12 +40,15 @@ const parseItDate = (s) => {
   return new Date(yyyy, mm - 1, dd);
 };
 
-const StatCard = ({ label, value, sub, Icon, iconBg, iconColor }) => (
+const StatCard = ({ label, value, sub, Icon, iconBg, iconColor, extra }) => (
   <div className="bg-white rounded-xl border border-gray-200/80 p-5 shadow-sm hover:shadow-md transition-shadow duration-200">
     <div className="flex items-start justify-between">
       <div>
         <div className="text-[11px] font-semibold tracking-[0.12em] text-gray-500 uppercase">{label}</div>
-        <div className="text-[28px] font-bold text-gray-900 mt-2 leading-none tracking-tight">{value}</div>
+        <div className="flex items-baseline gap-2 mt-2">
+          <div className="text-[28px] font-bold text-gray-900 leading-none tracking-tight">{value}</div>
+          {extra}
+        </div>
         <div className="text-[12px] text-gray-500 mt-2">{sub}</div>
       </div>
       <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${iconBg}`}>
@@ -230,6 +236,48 @@ export default function Dashboard() {
     return entries;
   }, [mode, userAudits, auditHistory]);
 
+  // Build real monthly trend per area
+  const realMonthlyTrend = useMemo(() => {
+    const targetType = mode === 'safety' ? 'Safety' : 'Quality';
+    const all = [];
+    auditHistory.forEach((g) => {
+      g.audits.forEach((a) => {
+        if (a.type === targetType) {
+          // derive month from week/year (approx — use Jan 4 + (week-1)*7 days)
+          const approx = new Date(g.year, 0, 4 + (g.week - 1) * 7);
+          all.push({ mo: approx.getMonth(), yr: approx.getFullYear(), area: a.area, score: a.score });
+        }
+      });
+    });
+    (userAudits[mode] || []).forEach((a) => {
+      const d = parseItDate(a.date);
+      all.push({ mo: d.getMonth(), yr: d.getFullYear(), area: a.area, score: a.score });
+    });
+
+    const grouped = {};
+    all.forEach((x) => {
+      const key = `${x.yr}-${x.mo}`;
+      if (!grouped[key]) grouped[key] = { mo: x.mo, yr: x.yr, byArea: {} };
+      if (!grouped[key].byArea[x.area]) grouped[key].byArea[x.area] = [];
+      grouped[key].byArea[x.area].push(x.score);
+    });
+
+    const entries = Object.values(grouped).map((w) => {
+      const obj = {
+        month: `${ITALIAN_MONTHS[w.mo].slice(0, 3)} ${String(w.yr).slice(-2)}`,
+        monthLabel: `${ITALIAN_MONTHS[w.mo]} ${w.yr}`,
+        moNum: w.mo,
+        yr: w.yr,
+      };
+      Object.entries(w.byArea).forEach(([area, scores]) => {
+        obj[area] = +(scores.reduce((s, v) => s + v, 0) / scores.length).toFixed(2);
+      });
+      return obj;
+    });
+    entries.sort((a, b) => (a.yr - b.yr) || (a.moNum - b.moNum));
+    return entries;
+  }, [mode, userAudits, auditHistory]);
+
   // Available week labels from real data (descending)
   const availableWeeks = useMemo(
     () => realWeeklyTrend.slice().reverse().map((w) => w.weekLabel),
@@ -324,15 +372,91 @@ export default function Dashboard() {
     ? !!(areaA && areaB && compareWeek)
     : !!(areaA && compareWeek && compareWeek2);
 
+  // ===== PDF Export =====
+  const exportRef = useRef(null);
+  const [exporting, setExporting] = useState(false);
+  const handleExportPdf = async () => {
+    if (!exportRef.current || exporting) return;
+    setExporting(true);
+    try {
+      const node = exportRef.current;
+      const canvas = await html2canvas(node, {
+        scale: 2,
+        backgroundColor: '#ffffff',
+        useCORS: true,
+        windowWidth: node.scrollWidth,
+        windowHeight: node.scrollHeight,
+      });
+      const imgData = canvas.toDataURL('image/png', 1.0);
+      const pdf = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait', compress: true });
+      const pageW = pdf.internal.pageSize.getWidth();
+      const pageH = pdf.internal.pageSize.getHeight();
+      const margin = 8;
+      const imgW = pageW - margin * 2;
+      const imgH = (canvas.height * imgW) / canvas.width;
+
+      if (imgH <= pageH - margin * 2) {
+        pdf.addImage(imgData, 'PNG', margin, margin, imgW, imgH, undefined, 'FAST');
+      } else {
+        // Slice across pages
+        const sliceHeightPx = ((pageH - margin * 2) * canvas.width) / imgW;
+        let renderedPx = 0;
+        let isFirst = true;
+        while (renderedPx < canvas.height) {
+          const remaining = canvas.height - renderedPx;
+          const sliceH = Math.min(sliceHeightPx, remaining);
+          const sliceCanvas = document.createElement('canvas');
+          sliceCanvas.width = canvas.width;
+          sliceCanvas.height = sliceH;
+          const ctx = sliceCanvas.getContext('2d');
+          ctx.fillStyle = '#ffffff';
+          ctx.fillRect(0, 0, sliceCanvas.width, sliceCanvas.height);
+          ctx.drawImage(canvas, 0, renderedPx, canvas.width, sliceH, 0, 0, canvas.width, sliceH);
+          const sliceImg = sliceCanvas.toDataURL('image/png', 1.0);
+          if (!isFirst) pdf.addPage();
+          const sliceImgH = (sliceH * imgW) / canvas.width;
+          pdf.addImage(sliceImg, 'PNG', margin, margin, imgW, sliceImgH, undefined, 'FAST');
+          renderedPx += sliceH;
+          isFirst = false;
+        }
+      }
+
+      const today = new Date().toISOString().slice(0, 10);
+      pdf.save(`dashboard-${mode}-${today}.pdf`);
+      toast.success('PDF generato');
+    } catch (e) {
+      console.warn(e);
+      toast.error("Errore nell'esportazione PDF");
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  const conversionPct = stats.punteggioMedio > 0
+    ? ((stats.punteggioMedio / (mode === 'safety' ? 3 : 5)) * 100).toFixed(1)
+    : '0.0';
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-6" ref={exportRef} data-testid="dashboard-export-root">
       {/* Header */}
       <div className="flex items-start justify-between flex-wrap gap-4">
         <div>
           <h1 className="text-[28px] font-bold text-gray-900 tracking-tight">Dashboard</h1>
           <p className="text-[13.5px] text-gray-500 mt-1">Panoramica punteggi e andamento audit settimanali</p>
         </div>
-        <ModeToggle mode={mode} onChange={setMode} />
+        <div className="flex items-center gap-3">
+          <button
+            onClick={handleExportPdf}
+            disabled={exporting}
+            data-testid="export-pdf-btn"
+            data-html2canvas-ignore="true"
+            className="flex items-center gap-2 px-3.5 h-9 text-sm font-medium border border-gray-300 hover:border-gray-400 bg-white text-gray-700 rounded-lg shadow-sm transition-colors disabled:opacity-60 disabled:cursor-wait"
+          >
+            {exporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+            <span>{exporting ? 'Generazione…' : 'Esporta PDF'}</span>
+          </button>
+          <ModeToggle mode={mode} onChange={setMode} />
+        </div>
       </div>
 
       {/* Stat cards */}
@@ -340,8 +464,20 @@ export default function Dashboard() {
         <StatCard
           label="Punteggio Medio"
           value={`${stats.punteggioMedio.toFixed(2)} / ${mode === 'safety' ? 3 : 5}`}
-          sub="Media tutte le aree"
+          sub={`Media tutte le aree · Conversione ${conversionPct}%`}
           Icon={Shield} iconBg="bg-emerald-50" iconColor="text-emerald-600"
+          extra={
+            <span
+              className={`px-2 py-0.5 rounded-md text-[11px] font-bold ${
+                parseFloat(conversionPct) >= 80 ? 'bg-emerald-100 text-emerald-700'
+                : parseFloat(conversionPct) >= 60 ? 'bg-amber-100 text-amber-700'
+                : 'bg-red-100 text-red-700'
+              }`}
+              data-testid="conversion-pct"
+            >
+              {conversionPct}%
+            </span>
+          }
         />
         <StatCard
           label="Audit Totali"
@@ -409,6 +545,54 @@ export default function Dashboard() {
             ))}
           </div>
         </div>
+      </div>
+
+      {/* Monthly trend per area */}
+      <div className="bg-white rounded-xl border border-gray-200/80 p-5 shadow-sm">
+        <h3 className="font-semibold text-gray-900 mb-4 text-[15px]">Andamento Mensile per Area</h3>
+        {realMonthlyTrend.length === 0 ? (
+          <div className="py-10 text-center text-sm text-gray-400">Nessun audit registrato per la modalità selezionata</div>
+        ) : (
+          <div className="h-[340px]">
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={realMonthlyTrend} margin={{ top: 8, right: 16, bottom: 8, left: -16 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" />
+                <XAxis dataKey="month" tick={{ fontSize: 11, fill: '#6b7280' }} axisLine={{ stroke: '#e5e7eb' }} tickLine={false} />
+                <YAxis
+                  domain={[0, mode === 'safety' ? 3.2 : 5.2]}
+                  ticks={mode === 'safety' ? [0, 1, 2, 3] : [0, 1, 2, 3, 4, 5]}
+                  tick={{ fontSize: 11, fill: '#6b7280' }}
+                  axisLine={false}
+                  tickLine={false}
+                />
+                <Tooltip content={<CustomTooltip />} />
+                <ReferenceLine
+                  y={mode === 'safety' ? 2 : 3}
+                  stroke="#ef4444"
+                  strokeDasharray="4 4"
+                  label={{ value: 'Min', position: 'right', fontSize: 10, fill: '#ef4444' }}
+                />
+                {AREA_ORDER.map((area) => (
+                  <Line
+                    key={area}
+                    type="monotone"
+                    dataKey={area}
+                    stroke={AREA_COLORS[area].accent}
+                    strokeWidth={2}
+                    dot={{ r: 3, strokeWidth: 1.5, fill: '#fff' }}
+                    activeDot={{ r: 5 }}
+                    connectNulls
+                  />
+                ))}
+                <Legend
+                  wrapperStyle={{ fontSize: 11, paddingTop: 8 }}
+                  iconType="circle"
+                  iconSize={8}
+                />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        )}
       </div>
 
       {/* Comparison row */}
