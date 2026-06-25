@@ -53,9 +53,12 @@ Italian (it-IT) — sempre rispondere all'utente in italiano.
   - Fallback "Nessun dettaglio per-domanda disponibile" per audit storici senza sectorScores
 - [DONE] **(2026-02-25)** Dashboard — nuove funzionalità:
   - Badge **percentuale di conversione** accanto al Punteggio Medio (verde ≥80, ambra ≥60, rosso <60) — funziona sia Safety (/3) che Quality (/5)
-  - Nuovo grafico **"Andamento Mensile per Area"** (line chart per area, aggregazione mensile da auditHistory + userAudits)
-  - Bottone **"Esporta PDF"** nell'header con qualità 2x: cattura tutta la dashboard via html2canvas e genera PDF multi-pagina A4 con jsPDF
+  - Grafico **"Andamento Mensile — Media Generale"**: una sola linea con la media complessiva di tutte le aree per ogni mese (precedente: 8 linee per area)
+  - Bottone **"Esporta PDF"** nell'header con qualità 2x e paginazione intelligente: rispetta i confini delle sezioni per evitare grafici tagliati, esclude "Confronto per Settimana", header/footer su ogni pagina A4
   - Dipendenze aggiunte: `html2canvas`, `jspdf`
+- [DONE] **(2026-02-25)** Dashboard — Radar Charts:
+  - **"Confronto Aree — Radar"**: media punteggi per ogni area su tutto lo storico (un poligono unico)
+  - **"Confronto Reparti — Radar"**: drill-down sui sotto-reparti dell'area selezionata (con dropdown per cambiare area, colore inherit da AREA_COLORS)
 ## Endpoint API completi
 - `POST /api/auth/register` — registrazione (operator default, owner se email = OWNER_EMAIL)
 - `POST /api/auth/login`

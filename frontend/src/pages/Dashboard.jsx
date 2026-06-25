@@ -5,7 +5,8 @@ import {
 } from 'lucide-react';
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
-  ResponsiveContainer, ReferenceLine, Legend
+  ResponsiveContainer, ReferenceLine, Legend,
+  RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar
 } from 'recharts';
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
@@ -257,26 +258,55 @@ export default function Dashboard() {
     const grouped = {};
     all.forEach((x) => {
       const key = `${x.yr}-${x.mo}`;
-      if (!grouped[key]) grouped[key] = { mo: x.mo, yr: x.yr, byArea: {} };
-      if (!grouped[key].byArea[x.area]) grouped[key].byArea[x.area] = [];
-      grouped[key].byArea[x.area].push(x.score);
+      if (!grouped[key]) grouped[key] = { mo: x.mo, yr: x.yr, scores: [] };
+      grouped[key].scores.push(x.score);
     });
 
-    const entries = Object.values(grouped).map((w) => {
-      const obj = {
-        month: `${ITALIAN_MONTHS[w.mo].slice(0, 3)} ${String(w.yr).slice(-2)}`,
-        monthLabel: `${ITALIAN_MONTHS[w.mo]} ${w.yr}`,
-        moNum: w.mo,
-        yr: w.yr,
-      };
-      Object.entries(w.byArea).forEach(([area, scores]) => {
-        obj[area] = +(scores.reduce((s, v) => s + v, 0) / scores.length).toFixed(2);
-      });
-      return obj;
-    });
+    const entries = Object.values(grouped).map((w) => ({
+      month: `${ITALIAN_MONTHS[w.mo].slice(0, 3)} ${String(w.yr).slice(-2)}`,
+      monthLabel: `${ITALIAN_MONTHS[w.mo]} ${w.yr}`,
+      moNum: w.mo,
+      yr: w.yr,
+      media: +(w.scores.reduce((s, v) => s + v, 0) / w.scores.length).toFixed(2),
+      audit: w.scores.length,
+    }));
     entries.sort((a, b) => (a.yr - b.yr) || (a.moNum - b.moNum));
     return entries;
   }, [mode, userAudits, auditHistory]);
+
+  // Radar data: average per area across all weeks
+  const radarAreasData = useMemo(() => {
+    const targetType = mode === 'safety' ? 'Safety' : 'Quality';
+    const byArea = {};
+    auditHistory.forEach((g) => {
+      g.audits.forEach((a) => {
+        if (a.type === targetType) {
+          if (!byArea[a.area]) byArea[a.area] = [];
+          byArea[a.area].push(a.score);
+        }
+      });
+    });
+    (userAudits[mode] || []).forEach((a) => {
+      if (!byArea[a.area]) byArea[a.area] = [];
+      byArea[a.area].push(a.score);
+    });
+    return AREA_ORDER.map((area) => {
+      const arr = byArea[area] || [];
+      const avg = arr.length ? +(arr.reduce((s, v) => s + v, 0) / arr.length).toFixed(2) : 0;
+      return { area: area.replace('Area ', ''), media: avg, full: area };
+    });
+  }, [mode, userAudits, auditHistory]);
+
+  // Selected area for reparti radar
+  const [radarArea, setRadarArea] = useState('Area Gialla');
+  const radarRepartiData = useMemo(() => {
+    const reparti = REPARTI_SCORES?.[radarArea]?.reparti || {};
+    return Object.entries(reparti).map(([name, score]) => ({
+      reparto: name.length > 22 ? name.slice(0, 20) + '…' : name,
+      full: name,
+      media: score,
+    }));
+  }, [radarArea]);
 
   // Available week labels from real data (descending)
   const availableWeeks = useMemo(
@@ -379,50 +409,109 @@ export default function Dashboard() {
     if (!exportRef.current || exporting) return;
     setExporting(true);
     try {
+      // Wait so charts settle and any open tooltips close
+      await new Promise((resolve) => setTimeout(resolve, 300));
+
       const node = exportRef.current;
+      node.classList.add('pdf-exporting');
+
+      // Capture safe break points = top offsets of each direct child section
+      const nodeRect = node.getBoundingClientRect();
+      const breakPointsCss = [0];
+      Array.from(node.children).forEach((child) => {
+        if (child.getAttribute && child.getAttribute('data-html2canvas-ignore') === 'true') return;
+        const r = child.getBoundingClientRect();
+        const top = r.top - nodeRect.top;
+        if (top > 0) breakPointsCss.push(top);
+        // also add bottom as a candidate break
+        breakPointsCss.push(top + r.height);
+      });
+      breakPointsCss.push(node.scrollHeight);
+      const uniqBreaksCss = Array.from(new Set(breakPointsCss.map((v) => Math.round(v)))).sort((a, b) => a - b);
+
       const canvas = await html2canvas(node, {
         scale: 2,
         backgroundColor: '#ffffff',
         useCORS: true,
+        logging: false,
         windowWidth: node.scrollWidth,
         windowHeight: node.scrollHeight,
+        onclone: (clonedDoc) => {
+          clonedDoc.querySelectorAll('.recharts-tooltip-wrapper').forEach((el) => { el.style.display = 'none'; });
+          clonedDoc.querySelectorAll('[data-html2canvas-ignore="true"]').forEach((el) => { el.style.display = 'none'; });
+          clonedDoc.querySelectorAll('.recharts-wrapper').forEach((el) => { el.style.backgroundColor = '#ffffff'; });
+        },
       });
-      const imgData = canvas.toDataURL('image/png', 1.0);
+
+      node.classList.remove('pdf-exporting');
+
+      // Convert CSS break points to canvas-pixel break points using scale ratio
+      const cssToCanvas = canvas.height / node.scrollHeight;
+      const breakPx = uniqBreaksCss.map((v) => Math.round(v * cssToCanvas));
+
       const pdf = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait', compress: true });
       const pageW = pdf.internal.pageSize.getWidth();
       const pageH = pdf.internal.pageSize.getHeight();
-      const margin = 8;
+      const margin = 10;
+      const headerH = 12;
+      const usableH = pageH - margin * 2 - headerH;
       const imgW = pageW - margin * 2;
-      const imgH = (canvas.height * imgW) / canvas.width;
+      const stripHpx = Math.floor((usableH * canvas.width) / imgW); // max px per page
 
-      if (imgH <= pageH - margin * 2) {
-        pdf.addImage(imgData, 'PNG', margin, margin, imgW, imgH, undefined, 'FAST');
-      } else {
-        // Slice across pages
-        const sliceHeightPx = ((pageH - margin * 2) * canvas.width) / imgW;
-        let renderedPx = 0;
-        let isFirst = true;
-        while (renderedPx < canvas.height) {
-          const remaining = canvas.height - renderedPx;
-          const sliceH = Math.min(sliceHeightPx, remaining);
-          const sliceCanvas = document.createElement('canvas');
-          sliceCanvas.width = canvas.width;
-          sliceCanvas.height = sliceH;
-          const ctx = sliceCanvas.getContext('2d');
-          ctx.fillStyle = '#ffffff';
-          ctx.fillRect(0, 0, sliceCanvas.width, sliceCanvas.height);
-          ctx.drawImage(canvas, 0, renderedPx, canvas.width, sliceH, 0, 0, canvas.width, sliceH);
-          const sliceImg = sliceCanvas.toDataURL('image/png', 1.0);
-          if (!isFirst) pdf.addPage();
-          const sliceImgH = (sliceH * imgW) / canvas.width;
-          pdf.addImage(sliceImg, 'PNG', margin, margin, imgW, sliceImgH, undefined, 'FAST');
-          renderedPx += sliceH;
-          isFirst = false;
+      // Build pages by greedily picking the largest break <= current + stripHpx
+      const pageRanges = []; // [{from, to}]
+      let cursor = 0;
+      while (cursor < canvas.height) {
+        const limit = cursor + stripHpx;
+        // Find the largest break point >= cursor and <= limit
+        let next = -1;
+        for (let i = breakPx.length - 1; i >= 0; i--) {
+          if (breakPx[i] > cursor && breakPx[i] <= limit) { next = breakPx[i]; break; }
         }
+        if (next === -1 || next === cursor) {
+          // No good break: hard cut at limit
+          next = Math.min(limit, canvas.height);
+        }
+        pageRanges.push({ from: cursor, to: next });
+        cursor = next;
       }
 
-      const today = new Date().toISOString().slice(0, 10);
-      pdf.save(`dashboard-${mode}-${today}.pdf`);
+      const today = new Date().toLocaleDateString('it-IT');
+      const titleSafety = mode === 'safety' ? 'Safety' : 'Quality';
+      const totalPages = pageRanges.length;
+
+      pageRanges.forEach((range, idx) => {
+        if (idx > 0) pdf.addPage();
+
+        // Header
+        pdf.setFontSize(10);
+        pdf.setTextColor(75, 85, 99);
+        pdf.text(`Housekeeping & Food Defense — Dashboard ${titleSafety}`, margin, margin + 5);
+        pdf.text(today, pageW - margin, margin + 5, { align: 'right' });
+        pdf.setDrawColor(229, 231, 235);
+        pdf.setLineWidth(0.2);
+        pdf.line(margin, margin + 8, pageW - margin, margin + 8);
+
+        const sliceH = range.to - range.from;
+        const sliceCanvas = document.createElement('canvas');
+        sliceCanvas.width = canvas.width;
+        sliceCanvas.height = sliceH;
+        const ctx = sliceCanvas.getContext('2d');
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, sliceCanvas.width, sliceCanvas.height);
+        ctx.drawImage(canvas, 0, range.from, canvas.width, sliceH, 0, 0, canvas.width, sliceH);
+        const sliceImg = sliceCanvas.toDataURL('image/png', 1.0);
+        const sliceImgH = (sliceH * imgW) / canvas.width;
+        pdf.addImage(sliceImg, 'PNG', margin, margin + headerH, imgW, sliceImgH, undefined, 'FAST');
+
+        // Footer
+        pdf.setFontSize(8);
+        pdf.setTextColor(156, 163, 175);
+        pdf.text(`Pagina ${idx + 1} di ${totalPages}`, pageW / 2, pageH - 5, { align: 'center' });
+      });
+
+      const iso = new Date().toISOString().slice(0, 10);
+      pdf.save(`dashboard-${mode}-${iso}.pdf`);
       toast.success('PDF generato');
     } catch (e) {
       console.warn(e);
@@ -547,13 +636,14 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* Monthly trend per area */}
+      {/* Monthly trend — Media Generale per mese */}
       <div className="bg-white rounded-xl border border-gray-200/80 p-5 shadow-sm">
-        <h3 className="font-semibold text-gray-900 mb-4 text-[15px]">Andamento Mensile per Area</h3>
+        <h3 className="font-semibold text-gray-900 mb-1 text-[15px]">Andamento Mensile — Media Generale</h3>
+        <p className="text-[12px] text-gray-500 mb-4">Media complessiva di tutte le aree, mese per mese.</p>
         {realMonthlyTrend.length === 0 ? (
           <div className="py-10 text-center text-sm text-gray-400">Nessun audit registrato per la modalità selezionata</div>
         ) : (
-          <div className="h-[340px]">
+          <div className="h-[320px]">
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={realMonthlyTrend} margin={{ top: 8, right: 16, bottom: 8, left: -16 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" />
@@ -565,34 +655,99 @@ export default function Dashboard() {
                   axisLine={false}
                   tickLine={false}
                 />
-                <Tooltip content={<CustomTooltip />} />
+                <Tooltip
+                  contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid #e5e7eb' }}
+                  formatter={(v) => [v.toFixed(2), 'Media']}
+                />
                 <ReferenceLine
                   y={mode === 'safety' ? 2 : 3}
                   stroke="#ef4444"
                   strokeDasharray="4 4"
                   label={{ value: 'Min', position: 'right', fontSize: 10, fill: '#ef4444' }}
                 />
-                {AREA_ORDER.map((area) => (
-                  <Line
-                    key={area}
-                    type="monotone"
-                    dataKey={area}
-                    stroke={AREA_COLORS[area].accent}
-                    strokeWidth={2}
-                    dot={{ r: 3, strokeWidth: 1.5, fill: '#fff' }}
-                    activeDot={{ r: 5 }}
-                    connectNulls
-                  />
-                ))}
-                <Legend
-                  wrapperStyle={{ fontSize: 11, paddingTop: 8 }}
-                  iconType="circle"
-                  iconSize={8}
+                <Line
+                  type="monotone"
+                  dataKey="media"
+                  name="Media Generale"
+                  stroke="#059669"
+                  strokeWidth={2.5}
+                  dot={{ r: 4, strokeWidth: 1.5, fill: '#fff', stroke: '#059669' }}
+                  activeDot={{ r: 6 }}
+                  label={{ position: 'top', fontSize: 10, fill: '#059669', formatter: (v) => v.toFixed(2) }}
                 />
               </LineChart>
             </ResponsiveContainer>
           </div>
         )}
+      </div>
+
+      {/* Radar chart row: Aree + Reparti */}
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
+        <div className="bg-white rounded-xl border border-gray-200/80 p-5 shadow-sm">
+          <h3 className="font-semibold text-gray-900 mb-1 text-[15px]">Confronto Aree — Radar</h3>
+          <p className="text-[12px] text-gray-500 mb-3">Media punteggi per area su tutto lo storico {mode === 'safety' ? 'Safety' : 'Quality'}.</p>
+          <div className="h-[340px]">
+            <ResponsiveContainer width="100%" height="100%">
+              <RadarChart data={radarAreasData} margin={{ top: 16, right: 32, bottom: 16, left: 32 }}>
+                <PolarGrid stroke="#e5e7eb" />
+                <PolarAngleAxis dataKey="area" tick={{ fontSize: 11, fill: '#374151' }} />
+                <PolarRadiusAxis
+                  angle={90}
+                  domain={[0, mode === 'safety' ? 3 : 5]}
+                  tick={{ fontSize: 10, fill: '#9ca3af' }}
+                />
+                <Tooltip
+                  contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid #e5e7eb' }}
+                  formatter={(v, _name, p) => [`${v.toFixed(2)} / ${mode === 'safety' ? 3 : 5}`, p?.payload?.full]}
+                />
+                <Radar
+                  name="Media"
+                  dataKey="media"
+                  stroke="#059669"
+                  fill="#10b981"
+                  fillOpacity={0.4}
+                  strokeWidth={2}
+                />
+              </RadarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+        <div className="bg-white rounded-xl border border-gray-200/80 p-5 shadow-sm">
+          <div className="flex items-center justify-between mb-1">
+            <h3 className="font-semibold text-gray-900 text-[15px]">Confronto Reparti — Radar</h3>
+            <Select value={radarArea} onValueChange={setRadarArea}>
+              <SelectTrigger className="w-[180px] h-9 text-xs"><SelectValue /></SelectTrigger>
+              <SelectContent>{AREA_ORDER.map((a) => <SelectItem key={a} value={a}>{a}</SelectItem>)}</SelectContent>
+            </Select>
+          </div>
+          <p className="text-[12px] text-gray-500 mb-3">Confronto sotto-reparti dell&apos;area selezionata.</p>
+          <div className="h-[340px]">
+            {radarRepartiData.length === 0 ? (
+              <div className="py-10 text-center text-sm text-gray-400">Nessun reparto disponibile</div>
+            ) : (
+              <ResponsiveContainer width="100%" height="100%">
+                <RadarChart data={radarRepartiData} margin={{ top: 16, right: 48, bottom: 16, left: 48 }}>
+                  <PolarGrid stroke="#e5e7eb" />
+                  <PolarAngleAxis dataKey="reparto" tick={{ fontSize: 10, fill: '#374151' }} />
+                  <PolarRadiusAxis angle={90} domain={[0, mode === 'safety' ? 3 : 5]} tick={{ fontSize: 10, fill: '#9ca3af' }} />
+                  <Tooltip
+                    contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid #e5e7eb' }}
+                    formatter={(v, _name, p) => [`${v.toFixed(2)} / ${mode === 'safety' ? 3 : 5}`, p?.payload?.full]}
+                  />
+                  <Radar
+                    name="Media"
+                    dataKey="media"
+                    stroke={AREA_COLORS[radarArea]?.accent || '#6366f1'}
+                    fill={AREA_COLORS[radarArea]?.accent || '#6366f1'}
+                    fillOpacity={0.35}
+                    strokeWidth={2}
+                  />
+                </RadarChart>
+              </ResponsiveContainer>
+            )}
+          </div>
+        </div>
       </div>
 
       {/* Comparison row */}
@@ -652,7 +807,10 @@ export default function Dashboard() {
         </div>
 
         {/* Weekly comparison */}
-        <div className="bg-white rounded-xl border border-gray-200/80 p-5 shadow-sm">
+        <div
+          className="bg-white rounded-xl border border-gray-200/80 p-5 shadow-sm"
+          data-html2canvas-ignore="true"
+        >
           <div className="flex items-center justify-between mb-4">
             <h3 className="font-semibold text-gray-900 text-[15px]">Confronto per Settimana</h3>
             <div className="flex bg-gray-100 rounded-lg p-0.5">
