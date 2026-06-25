@@ -51,14 +51,13 @@ Italian (it-IT) — sempre rispondere all'utente in italiano.
   - Rimosso l'uso dei mock `SAFETY_QUESTIONS`/`QUALITY_QUESTIONS` come fonte di domande
   - Mostrato il `code` della domanda (es. "S001") invece dell'id interno
   - Fallback "Nessun dettaglio per-domanda disponibile" per audit storici senza sectorScores
-- [DONE] **(2026-02-25)** Dashboard — nuove funzionalità:
-  - Badge **percentuale di conversione** accanto al Punteggio Medio (verde ≥80, ambra ≥60, rosso <60) — funziona sia Safety (/3) che Quality (/5)
-  - Grafico **"Andamento Mensile — Media Generale"**: una sola linea con la media complessiva di tutte le aree per ogni mese (precedente: 8 linee per area)
-  - Bottone **"Esporta PDF"** nell'header con qualità 2x e paginazione intelligente: rispetta i confini delle sezioni per evitare grafici tagliati, esclude "Confronto per Settimana", header/footer su ogni pagina A4
-  - Dipendenze aggiunte: `html2canvas`, `jspdf`
 - [DONE] **(2026-02-25)** Dashboard — Radar Charts:
-  - **"Confronto Aree — Radar"**: media punteggi per ogni area su tutto lo storico (un poligono unico)
-  - **"Confronto Reparti — Radar"**: drill-down sui sotto-reparti dell'area selezionata (con dropdown per cambiare area, colore inherit da AREA_COLORS)
+  - **"Confronto Aree — Radar"**: nero, con etichette numeriche su ogni vertice
+  - **"Confronto Reparti — Radar"**: drill-down dinamico dai dati reali (userAudits.sectorScores) con fallback ai mock REPARTI_SCORES; etichette numeriche su ogni vertice + **tabella riepilogo sotto il radar** (sortata dal peggiore al migliore, barre progress e valori in rosso sotto soglia)
+- [DONE] **(2026-02-25)** Dashboard — grafici lineari:
+  - "Andamento Settimanale per Area": aggiunta linea **Media** nera tratteggiata con etichetta numerica sopra ogni punto (Y-axis ora mode-aware Safety/Quality)
+  - "Andamento Mensile per Area": multi-area colorato + linea Media nera tratteggiata con etichetta numerica sopra ogni punto
+- [DONE] **(2026-02-25)** Rimosso bottone "Esporta PDF" dalla Dashboard (dipendenze `html2canvas`/`jspdf` disinstallate)
 ## Endpoint API completi
 - `POST /api/auth/register` — registrazione (operator default, owner se email = OWNER_EMAIL)
 - `POST /api/auth/login`

@@ -1,15 +1,13 @@
-import React, { useState, useMemo, useEffect, useRef } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   Shield, ClipboardCheck, AlertTriangle,
-  ChevronDown, ChevronUp, Minus, ArrowDown, ArrowUp, Download, Loader2
+  ChevronDown, ChevronUp, Minus, ArrowDown, ArrowUp
 } from 'lucide-react';
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, ReferenceLine, Legend,
   RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar
 } from 'recharts';
-import html2canvas from 'html2canvas';
-import jsPDF from 'jspdf';
 import { toast } from 'sonner';
 import ModeToggle from '../components/ModeToggle';
 import {
@@ -228,23 +226,27 @@ export default function Dashboard() {
         wkNum: w.wk,
         yr: w.yr,
       };
+      let total = 0;
+      let count = 0;
       Object.entries(w.byArea).forEach(([area, scores]) => {
         obj[area] = +(scores.reduce((s, v) => s + v, 0) / scores.length).toFixed(2);
+        total += scores.reduce((s, v) => s + v, 0);
+        count += scores.length;
       });
+      obj.media = count > 0 ? +(total / count).toFixed(2) : null;
       return obj;
     });
     entries.sort((a, b) => (a.yr - b.yr) || (a.wkNum - b.wkNum));
     return entries;
   }, [mode, userAudits, auditHistory]);
 
-  // Build real monthly trend per area
+  // Build real monthly trend per area (multi-area + media)
   const realMonthlyTrend = useMemo(() => {
     const targetType = mode === 'safety' ? 'Safety' : 'Quality';
     const all = [];
     auditHistory.forEach((g) => {
       g.audits.forEach((a) => {
         if (a.type === targetType) {
-          // derive month from week/year (approx — use Jan 4 + (week-1)*7 days)
           const approx = new Date(g.year, 0, 4 + (g.week - 1) * 7);
           all.push({ mo: approx.getMonth(), yr: approx.getFullYear(), area: a.area, score: a.score });
         }
@@ -258,18 +260,28 @@ export default function Dashboard() {
     const grouped = {};
     all.forEach((x) => {
       const key = `${x.yr}-${x.mo}`;
-      if (!grouped[key]) grouped[key] = { mo: x.mo, yr: x.yr, scores: [] };
-      grouped[key].scores.push(x.score);
+      if (!grouped[key]) grouped[key] = { mo: x.mo, yr: x.yr, byArea: {} };
+      if (!grouped[key].byArea[x.area]) grouped[key].byArea[x.area] = [];
+      grouped[key].byArea[x.area].push(x.score);
     });
 
-    const entries = Object.values(grouped).map((w) => ({
-      month: `${ITALIAN_MONTHS[w.mo].slice(0, 3)} ${String(w.yr).slice(-2)}`,
-      monthLabel: `${ITALIAN_MONTHS[w.mo]} ${w.yr}`,
-      moNum: w.mo,
-      yr: w.yr,
-      media: +(w.scores.reduce((s, v) => s + v, 0) / w.scores.length).toFixed(2),
-      audit: w.scores.length,
-    }));
+    const entries = Object.values(grouped).map((w) => {
+      const obj = {
+        month: `${ITALIAN_MONTHS[w.mo].slice(0, 3)} ${String(w.yr).slice(-2)}`,
+        monthLabel: `${ITALIAN_MONTHS[w.mo]} ${w.yr}`,
+        moNum: w.mo,
+        yr: w.yr,
+      };
+      let total = 0;
+      let count = 0;
+      Object.entries(w.byArea).forEach(([area, scores]) => {
+        obj[area] = +(scores.reduce((s, v) => s + v, 0) / scores.length).toFixed(2);
+        total += scores.reduce((s, v) => s + v, 0);
+        count += scores.length;
+      });
+      obj.media = count > 0 ? +(total / count).toFixed(2) : null;
+      return obj;
+    });
     entries.sort((a, b) => (a.yr - b.yr) || (a.moNum - b.moNum));
     return entries;
   }, [mode, userAudits, auditHistory]);
@@ -299,14 +311,47 @@ export default function Dashboard() {
 
   // Selected area for reparti radar
   const [radarArea, setRadarArea] = useState('Area Gialla');
+  // Radar Reparti: compute REAL averages from audit sectorScores for the selected area
   const radarRepartiData = useMemo(() => {
-    const reparti = REPARTI_SCORES?.[radarArea]?.reparti || {};
-    return Object.entries(reparti).map(([name, score]) => ({
-      reparto: name.length > 22 ? name.slice(0, 20) + '…' : name,
-      full: name,
-      media: score,
-    }));
-  }, [radarArea]);
+    const targetType = mode === 'safety' ? 'Safety' : 'Quality';
+    // Aggregate per-reparto question scores across:
+    //   1) user-saved audits matching area+type (use sectorScores: {reparto: {qid: score}})
+    //   2) mock REPARTI_SCORES as fallback baseline (if no user data yet)
+    const userAuditsForArea = (userAudits[mode] || []).filter((a) => a.area === radarArea);
+    const repartoAgg = {}; // { repartoName: { sum, count } }
+
+    userAuditsForArea.forEach((a) => {
+      const sectors = a.sectorScores || {};
+      Object.entries(sectors).forEach(([reparto, qScores]) => {
+        Object.values(qScores || {}).forEach((s) => {
+          if (typeof s !== 'number') return;
+          if (!repartoAgg[reparto]) repartoAgg[reparto] = { sum: 0, count: 0 };
+          repartoAgg[reparto].sum += s;
+          repartoAgg[reparto].count += 1;
+        });
+      });
+    });
+
+    // Merge with mock baseline so reparti without user data still appear with mock score
+    const mockReparti = REPARTI_SCORES?.[radarArea]?.reparti || {};
+    const allReparti = new Set([...Object.keys(mockReparti), ...Object.keys(repartoAgg)]);
+
+    const result = Array.from(allReparti).map((name) => {
+      const agg = repartoAgg[name];
+      const score = agg && agg.count > 0
+        ? +(agg.sum / agg.count).toFixed(2)
+        : (mockReparti[name] || 0);
+      return {
+        reparto: name.length > 22 ? name.slice(0, 20) + '…' : name,
+        full: name,
+        media: score,
+      };
+    });
+
+    // Sort by score asc so weaknesses are visually first (helps spot underperformers)
+    result.sort((a, b) => a.media - b.media);
+    return result;
+  }, [radarArea, mode, userAudits]);
 
   // Available week labels from real data (descending)
   const availableWeeks = useMemo(
@@ -402,150 +447,19 @@ export default function Dashboard() {
     ? !!(areaA && areaB && compareWeek)
     : !!(areaA && compareWeek && compareWeek2);
 
-  // ===== PDF Export =====
-  const exportRef = useRef(null);
-  const [exporting, setExporting] = useState(false);
-  const handleExportPdf = async () => {
-    if (!exportRef.current || exporting) return;
-    setExporting(true);
-    try {
-      // Wait so charts settle and any open tooltips close
-      await new Promise((resolve) => setTimeout(resolve, 300));
-
-      const node = exportRef.current;
-      node.classList.add('pdf-exporting');
-
-      // Capture safe break points = top offsets of each direct child section
-      const nodeRect = node.getBoundingClientRect();
-      const breakPointsCss = [0];
-      Array.from(node.children).forEach((child) => {
-        if (child.getAttribute && child.getAttribute('data-html2canvas-ignore') === 'true') return;
-        const r = child.getBoundingClientRect();
-        const top = r.top - nodeRect.top;
-        if (top > 0) breakPointsCss.push(top);
-        // also add bottom as a candidate break
-        breakPointsCss.push(top + r.height);
-      });
-      breakPointsCss.push(node.scrollHeight);
-      const uniqBreaksCss = Array.from(new Set(breakPointsCss.map((v) => Math.round(v)))).sort((a, b) => a - b);
-
-      const canvas = await html2canvas(node, {
-        scale: 2,
-        backgroundColor: '#ffffff',
-        useCORS: true,
-        logging: false,
-        windowWidth: node.scrollWidth,
-        windowHeight: node.scrollHeight,
-        onclone: (clonedDoc) => {
-          clonedDoc.querySelectorAll('.recharts-tooltip-wrapper').forEach((el) => { el.style.display = 'none'; });
-          clonedDoc.querySelectorAll('[data-html2canvas-ignore="true"]').forEach((el) => { el.style.display = 'none'; });
-          clonedDoc.querySelectorAll('.recharts-wrapper').forEach((el) => { el.style.backgroundColor = '#ffffff'; });
-        },
-      });
-
-      node.classList.remove('pdf-exporting');
-
-      // Convert CSS break points to canvas-pixel break points using scale ratio
-      const cssToCanvas = canvas.height / node.scrollHeight;
-      const breakPx = uniqBreaksCss.map((v) => Math.round(v * cssToCanvas));
-
-      const pdf = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait', compress: true });
-      const pageW = pdf.internal.pageSize.getWidth();
-      const pageH = pdf.internal.pageSize.getHeight();
-      const margin = 10;
-      const headerH = 12;
-      const usableH = pageH - margin * 2 - headerH;
-      const imgW = pageW - margin * 2;
-      const stripHpx = Math.floor((usableH * canvas.width) / imgW); // max px per page
-
-      // Build pages by greedily picking the largest break <= current + stripHpx
-      const pageRanges = []; // [{from, to}]
-      let cursor = 0;
-      while (cursor < canvas.height) {
-        const limit = cursor + stripHpx;
-        // Find the largest break point >= cursor and <= limit
-        let next = -1;
-        for (let i = breakPx.length - 1; i >= 0; i--) {
-          if (breakPx[i] > cursor && breakPx[i] <= limit) { next = breakPx[i]; break; }
-        }
-        if (next === -1 || next === cursor) {
-          // No good break: hard cut at limit
-          next = Math.min(limit, canvas.height);
-        }
-        pageRanges.push({ from: cursor, to: next });
-        cursor = next;
-      }
-
-      const today = new Date().toLocaleDateString('it-IT');
-      const titleSafety = mode === 'safety' ? 'Safety' : 'Quality';
-      const totalPages = pageRanges.length;
-
-      pageRanges.forEach((range, idx) => {
-        if (idx > 0) pdf.addPage();
-
-        // Header
-        pdf.setFontSize(10);
-        pdf.setTextColor(75, 85, 99);
-        pdf.text(`Housekeeping & Food Defense — Dashboard ${titleSafety}`, margin, margin + 5);
-        pdf.text(today, pageW - margin, margin + 5, { align: 'right' });
-        pdf.setDrawColor(229, 231, 235);
-        pdf.setLineWidth(0.2);
-        pdf.line(margin, margin + 8, pageW - margin, margin + 8);
-
-        const sliceH = range.to - range.from;
-        const sliceCanvas = document.createElement('canvas');
-        sliceCanvas.width = canvas.width;
-        sliceCanvas.height = sliceH;
-        const ctx = sliceCanvas.getContext('2d');
-        ctx.fillStyle = '#ffffff';
-        ctx.fillRect(0, 0, sliceCanvas.width, sliceCanvas.height);
-        ctx.drawImage(canvas, 0, range.from, canvas.width, sliceH, 0, 0, canvas.width, sliceH);
-        const sliceImg = sliceCanvas.toDataURL('image/png', 1.0);
-        const sliceImgH = (sliceH * imgW) / canvas.width;
-        pdf.addImage(sliceImg, 'PNG', margin, margin + headerH, imgW, sliceImgH, undefined, 'FAST');
-
-        // Footer
-        pdf.setFontSize(8);
-        pdf.setTextColor(156, 163, 175);
-        pdf.text(`Pagina ${idx + 1} di ${totalPages}`, pageW / 2, pageH - 5, { align: 'center' });
-      });
-
-      const iso = new Date().toISOString().slice(0, 10);
-      pdf.save(`dashboard-${mode}-${iso}.pdf`);
-      toast.success('PDF generato');
-    } catch (e) {
-      console.warn(e);
-      toast.error("Errore nell'esportazione PDF");
-    } finally {
-      setExporting(false);
-    }
-  };
-
   const conversionPct = stats.punteggioMedio > 0
     ? ((stats.punteggioMedio / (mode === 'safety' ? 3 : 5)) * 100).toFixed(1)
     : '0.0';
 
   return (
-    <div className="space-y-6" ref={exportRef} data-testid="dashboard-export-root">
+    <div className="space-y-6">
       {/* Header */}
       <div className="flex items-start justify-between flex-wrap gap-4">
         <div>
           <h1 className="text-[28px] font-bold text-gray-900 tracking-tight">Dashboard</h1>
           <p className="text-[13.5px] text-gray-500 mt-1">Panoramica punteggi e andamento audit settimanali</p>
         </div>
-        <div className="flex items-center gap-3">
-          <button
-            onClick={handleExportPdf}
-            disabled={exporting}
-            data-testid="export-pdf-btn"
-            data-html2canvas-ignore="true"
-            className="flex items-center gap-2 px-3.5 h-9 text-sm font-medium border border-gray-300 hover:border-gray-400 bg-white text-gray-700 rounded-lg shadow-sm transition-colors disabled:opacity-60 disabled:cursor-wait"
-          >
-            {exporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
-            <span>{exporting ? 'Generazione…' : 'Esporta PDF'}</span>
-          </button>
-          <ModeToggle mode={mode} onChange={setMode} />
-        </div>
+        <ModeToggle mode={mode} onChange={setMode} />
       </div>
 
       {/* Stat cards */}
@@ -588,12 +502,16 @@ export default function Dashboard() {
           <h3 className="font-semibold text-gray-900 mb-4 text-[15px]">Andamento Settimanale per Area</h3>
           <div className="h-[340px]">
             <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={realWeeklyTrend} margin={{ top: 8, right: 16, bottom: 8, left: -16 }}>
+              <LineChart data={realWeeklyTrend} margin={{ top: 22, right: 16, bottom: 8, left: -16 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" />
                 <XAxis dataKey="week" tick={{ fontSize: 11, fill: '#6b7280' }} axisLine={{ stroke: '#e5e7eb' }} tickLine={false} />
-                <YAxis domain={[0, 3.2]} ticks={[0, 1, 2, 3]} tick={{ fontSize: 11, fill: '#6b7280' }} axisLine={false} tickLine={false} />
+                <YAxis
+                  domain={[0, mode === 'safety' ? 3.2 : 5.2]}
+                  ticks={mode === 'safety' ? [0, 1, 2, 3] : [0, 1, 2, 3, 4, 5]}
+                  tick={{ fontSize: 11, fill: '#6b7280' }} axisLine={false} tickLine={false}
+                />
                 <Tooltip content={<CustomTooltip />} />
-                <ReferenceLine y={2} stroke="#ef4444" strokeDasharray="4 4" label={{ value: 'Min', position: 'right', fontSize: 10, fill: '#ef4444' }} />
+                <ReferenceLine y={mode === 'safety' ? 2 : 3} stroke="#ef4444" strokeDasharray="4 4" label={{ value: 'Min', position: 'right', fontSize: 10, fill: '#ef4444' }} />
                 {AREA_ORDER.map((area) => (
                   <Line
                     key={area}
@@ -605,11 +523,19 @@ export default function Dashboard() {
                     activeDot={{ r: 5 }}
                   />
                 ))}
-                <Legend
-                  wrapperStyle={{ fontSize: 11, paddingTop: 8 }}
-                  iconType="circle"
-                  iconSize={8}
+                {/* Media settimanale (linea nera con etichetta sopra ogni punto) */}
+                <Line
+                  type="monotone"
+                  dataKey="media"
+                  name="Media"
+                  stroke="#111827"
+                  strokeWidth={2.5}
+                  strokeDasharray="6 3"
+                  dot={{ r: 4, strokeWidth: 1.5, fill: '#fff', stroke: '#111827' }}
+                  activeDot={{ r: 6 }}
+                  label={{ position: 'top', fontSize: 10, fontWeight: 600, fill: '#111827', formatter: (v) => (typeof v === 'number' ? v.toFixed(2) : '') }}
                 />
+                <Legend wrapperStyle={{ fontSize: 11, paddingTop: 8 }} iconType="circle" iconSize={8} />
               </LineChart>
             </ResponsiveContainer>
           </div>
@@ -636,16 +562,16 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* Monthly trend — Media Generale per mese */}
+      {/* Monthly trend per area + media generale */}
       <div className="bg-white rounded-xl border border-gray-200/80 p-5 shadow-sm">
-        <h3 className="font-semibold text-gray-900 mb-1 text-[15px]">Andamento Mensile — Media Generale</h3>
-        <p className="text-[12px] text-gray-500 mb-4">Media complessiva di tutte le aree, mese per mese.</p>
+        <h3 className="font-semibold text-gray-900 mb-1 text-[15px]">Andamento Mensile per Area</h3>
+        <p className="text-[12px] text-gray-500 mb-4">Tutte le aree mese per mese. La linea nera tratteggiata è la media generale (etichetta sopra ogni punto).</p>
         {realMonthlyTrend.length === 0 ? (
           <div className="py-10 text-center text-sm text-gray-400">Nessun audit registrato per la modalità selezionata</div>
         ) : (
-          <div className="h-[320px]">
+          <div className="h-[360px]">
             <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={realMonthlyTrend} margin={{ top: 8, right: 16, bottom: 8, left: -16 }}>
+              <LineChart data={realMonthlyTrend} margin={{ top: 22, right: 16, bottom: 8, left: -16 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" />
                 <XAxis dataKey="month" tick={{ fontSize: 11, fill: '#6b7280' }} axisLine={{ stroke: '#e5e7eb' }} tickLine={false} />
                 <YAxis
@@ -655,26 +581,39 @@ export default function Dashboard() {
                   axisLine={false}
                   tickLine={false}
                 />
-                <Tooltip
-                  contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid #e5e7eb' }}
-                  formatter={(v) => [v.toFixed(2), 'Media']}
-                />
+                <Tooltip content={<CustomTooltip />} />
                 <ReferenceLine
                   y={mode === 'safety' ? 2 : 3}
                   stroke="#ef4444"
                   strokeDasharray="4 4"
                   label={{ value: 'Min', position: 'right', fontSize: 10, fill: '#ef4444' }}
                 />
+                {AREA_ORDER.map((area) => (
+                  <Line
+                    key={area}
+                    type="monotone"
+                    dataKey={area}
+                    stroke={AREA_COLORS[area].accent}
+                    strokeWidth={2}
+                    dot={{ r: 3, strokeWidth: 1.5, fill: '#fff' }}
+                    activeDot={{ r: 5 }}
+                    connectNulls
+                  />
+                ))}
+                {/* Media generale come linea nera con etichetta */}
                 <Line
                   type="monotone"
                   dataKey="media"
-                  name="Media Generale"
-                  stroke="#059669"
+                  name="Media"
+                  stroke="#111827"
                   strokeWidth={2.5}
-                  dot={{ r: 4, strokeWidth: 1.5, fill: '#fff', stroke: '#059669' }}
+                  strokeDasharray="6 3"
+                  dot={{ r: 4, strokeWidth: 1.5, fill: '#fff', stroke: '#111827' }}
                   activeDot={{ r: 6 }}
-                  label={{ position: 'top', fontSize: 10, fill: '#059669', formatter: (v) => v.toFixed(2) }}
+                  label={{ position: 'top', fontSize: 10, fontWeight: 600, fill: '#111827', formatter: (v) => (typeof v === 'number' ? v.toFixed(2) : '') }}
+                  connectNulls
                 />
+                <Legend wrapperStyle={{ fontSize: 11, paddingTop: 8 }} iconType="circle" iconSize={8} />
               </LineChart>
             </ResponsiveContainer>
           </div>
@@ -703,10 +642,11 @@ export default function Dashboard() {
                 <Radar
                   name="Media"
                   dataKey="media"
-                  stroke="#059669"
-                  fill="#10b981"
-                  fillOpacity={0.4}
+                  stroke="#111827"
+                  fill="#111827"
+                  fillOpacity={0.25}
                   strokeWidth={2}
+                  label={{ fontSize: 11, fontWeight: 700, fill: '#111827', formatter: (v) => (typeof v === 'number' ? v.toFixed(2) : '') }}
                 />
               </RadarChart>
             </ResponsiveContainer>
@@ -722,7 +662,7 @@ export default function Dashboard() {
             </Select>
           </div>
           <p className="text-[12px] text-gray-500 mb-3">Confronto sotto-reparti dell&apos;area selezionata.</p>
-          <div className="h-[340px]">
+          <div className="h-[280px]">
             {radarRepartiData.length === 0 ? (
               <div className="py-10 text-center text-sm text-gray-400">Nessun reparto disponibile</div>
             ) : (
@@ -742,11 +682,45 @@ export default function Dashboard() {
                     fill={AREA_COLORS[radarArea]?.accent || '#6366f1'}
                     fillOpacity={0.35}
                     strokeWidth={2}
+                    label={{ fontSize: 11, fontWeight: 700, fill: '#111827', formatter: (v) => (typeof v === 'number' ? v.toFixed(2) : '') }}
                   />
                 </RadarChart>
               </ResponsiveContainer>
             )}
           </div>
+          {/* Summary table */}
+          {radarRepartiData.length > 0 && (() => {
+            const sorted = [...radarRepartiData].sort((a, b) => a.media - b.media);
+            const max = mode === 'safety' ? 3 : 5;
+            const thr = mode === 'safety' ? 2 : 3;
+            return (
+              <div className="mt-3 rounded-lg border border-gray-200 overflow-hidden">
+                <div className="px-3 py-1.5 text-[10px] font-semibold text-gray-500 uppercase tracking-wider bg-gray-50 border-b border-gray-200">
+                  Punteggi per Reparto · {radarArea}
+                </div>
+                <div className="max-h-[140px] overflow-y-auto">
+                  {sorted.map((r, i) => {
+                    const pct = (r.media / max) * 100;
+                    const isLow = r.media < thr;
+                    return (
+                      <div key={r.full} className={`flex items-center gap-3 px-3 py-1.5 ${i > 0 ? 'border-t border-gray-100' : ''}`}>
+                        <span className="text-[12px] text-gray-700 flex-1 truncate" title={r.full}>{r.full}</span>
+                        <div className="w-24 h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                          <div
+                            className={`h-full ${isLow ? 'bg-red-500' : 'bg-emerald-500'}`}
+                            style={{ width: `${Math.min(100, pct)}%` }}
+                          />
+                        </div>
+                        <span className={`text-[12px] font-semibold tabular-nums w-12 text-right ${isLow ? 'text-red-700' : 'text-gray-800'}`}>
+                          {r.media.toFixed(2)}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })()}
         </div>
       </div>
 
