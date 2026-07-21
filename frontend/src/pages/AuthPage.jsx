@@ -148,7 +148,7 @@ export default function AuthPage() {
         </form>
 
         <p className="text-[11px] text-gray-400 text-center mt-5">
-          L&apos;account Owner è riservato a <span className="font-medium">poltronieri.manuel@gmail.com</span>.<br />
+          L&apos;account Owner è riservato agli utenti autorizzati.<br />
           Tutti gli altri utenti accedono come Operatore.
         </p>
       </div>

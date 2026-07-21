@@ -13,7 +13,7 @@ Italian (it-IT) — sempre rispondere all'utente in italiano.
 - **Persistenza dati**: MongoDB centralizzato (collections: `users`, `audits`, `criticita_state`, `config`)
 
 ## Ruoli
-- **Owner**: `poltronieri.manuel@gmail.com` (hardcoded) — accesso completo (Dashboard, Storico Audit, Storico Segnalazioni, Configurazione, Nuovo Audit, Zone e Calendario). Vede tutti gli audit di tutti gli operatori.
+- **Owner**: emails autorizzate (`poltronieri.manuel@gmail.com`, `monica.abate@cchellenic.com`, `marcello.iannella@cchellenic.com`) — accesso completo (Dashboard, Storico Audit, Storico Segnalazioni, Configurazione, Nuovo Audit, Zone e Calendario). Vede tutti gli audit di tutti gli operatori.
 - **Operator**: qualunque altra email — accesso ristretto a Nuovo Audit e Zone e Calendario. Vede solo i propri audit/criticità.
 
 ## Funzionalità Implementate

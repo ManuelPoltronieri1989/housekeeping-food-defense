@@ -20,7 +20,11 @@ mongo_url = os.environ['MONGO_URL']
 client = AsyncIOMotorClient(mongo_url)
 db = client[os.environ['DB_NAME']]
 
-OWNER_EMAIL = "poltronieri.manuel@gmail.com"
+OWNER_EMAILS = {
+    "poltronieri.manuel@gmail.com",
+    "monica.abate@cchellenic.com",
+    "marcello.iannella@cchellenic.com",
+}
 JWT_SECRET = os.environ.get("JWT_SECRET", "hk-secret-change-me-please-987654")
 JWT_ALG = "HS256"
 JWT_EXPIRES_HOURS = 24 * 30  # 30 days
@@ -58,7 +62,7 @@ class AuthOut(BaseModel):
 
 
 def role_for(email: str) -> str:
-    return "owner" if email.lower().strip() == OWNER_EMAIL.lower() else "operator"
+    return "owner" if email.lower().strip() in OWNER_EMAILS else "operator"
 
 
 def create_token(user_id: str, email: str) -> str:
