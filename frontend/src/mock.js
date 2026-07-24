@@ -19,24 +19,24 @@ export const AREAS_BY_BUILDING = {
 // Note: "Area Arancio" in calendar, but "Area Arancione" in scores. Keep both, but normalize.
 export const AREAS_REPARTI = {
   'Area Gialla':    ['Settore B', 'Tettoia ricarica carrelli LOG', 'Settore C', 'Settore A'],
-  'Area Celeste':   ['Carico posteriore', 'Carico Laterale', 'Piazzale cauzioni', 'Tettoia vetro', 'Schiacciamento'],
+  'Area Celeste':   ['Carico posteriore', 'Carico Laterale', 'Piazzale cauzioni', 'Tettoia vetro', 'Nuova Area Disposal'],
   'Area Rossa':     ['Settore 1', 'Settore 2', 'Settore 3'],
   'Area Viola':     ['Zone Reso/Consegna Mp', 'Magazzino Lattine', 'Fine Linea', 'Magazzino preforme A-PET', 'Magazzino Film/Destrosio', 'Scaffalatura Area 2200', 'Piazzale scarico lattine'],
-  'Area Blu':       ['Settore 6', 'Settore 5', 'Tettoia ricarica carrelli - 111', 'Settore 4'],
+  'Area Blu':       ['Settore 6', 'Settore 5', 'Tettoia ricarica carrelli - Settore 4 Mag. 111', 'Settore 4'],
   'Area Verde':     ['Magazzino Concentrati', 'Fine Linea fusti', 'Magazzino Preforme', 'Fine linea bib'],
   'Area Grigia':    ['Piazzale Parolini', 'Area ecologica', '110 Tettoia ricarica carrelli MAN', 'Perimetro esterno', 'Perimetro esterno lato ferrovia', '110 Tettoia Aws'],
-  'Area Arancione': ['Settore 7', 'Settore 8'],
+  'Area Arancione': ['Settore 7', 'Settore 8', 'Tettoia ricarica carrelli - Settore 7 Mag. 111'],
 };
 
 export const REPARTI_SCORES = {
   'Area Gialla': { score: 2.96, reparti: { 'Settore B': 2.86, 'Tettoia ricarica carrelli LOG': 3.00, 'Settore C': 3.00, 'Settore A': 3.00 } },
-  'Area Celeste': { score: 3.00, reparti: { 'Carico posteriore': 3.00, 'Carico Laterale': 3.00, 'Piazzale cauzioni': 3.00, 'Tettoia vetro': 3.00, 'Schiacciamento': 3.00 } },
+  'Area Celeste': { score: 3.00, reparti: { 'Carico posteriore': 3.00, 'Carico Laterale': 3.00, 'Piazzale cauzioni': 3.00, 'Tettoia vetro': 3.00, 'Nuova Area Disposal': 3.00 } },
   'Area Rossa': { score: 2.90, reparti: { 'Settore 1': 3.00, 'Settore 2': 2.71, 'Settore 3': 3.00 } },
   'Area Viola': { score: 2.95, reparti: { 'Zone Reso/Consegna Mp': 3.00, 'Magazzino Lattine': 3.00, 'Fine Linea': 2.67, 'Magazzino preforme A-PET': 3.00, 'Magazzino Film/Destrosio': 3.00, 'Scaffalatura Area 2200': 3.00, 'Piazzale scarico lattine': 3.00 } },
-  'Area Blu': { score: 3.00, reparti: { 'Settore 6': 3.00, 'Settore 5': 3.00, 'Tettoia ricarica carrelli - 111': 3.00, 'Settore 4': 3.00 } },
+  'Area Blu': { score: 3.00, reparti: { 'Settore 6': 3.00, 'Settore 5': 3.00, 'Tettoia ricarica carrelli - Settore 4 Mag. 111': 3.00, 'Settore 4': 3.00 } },
   'Area Verde': { score: 3.00, reparti: { 'Magazzino Concentrati': 3.00, 'Fine Linea fusti': 3.00, 'Magazzino Preforme': 3.00, 'Fine linea bib': 3.00 } },
   'Area Grigia': { score: 2.94, reparti: { 'Piazzale Parolini': 3.00, 'Area ecologica': 3.00, '110 Tettoia ricarica carrelli MAN': 2.67, 'Perimetro esterno': 3.00, 'Perimetro esterno lato ferrovia': 3.00, '110 Tettoia Aws': 3.00 } },
-  'Area Arancione': { score: 2.90, reparti: { 'Settore 7': 2.80, 'Settore 8': 3.00 } },
+  'Area Arancione': { score: 2.90, reparti: { 'Settore 7': 2.80, 'Settore 8': 3.00, 'Tettoia ricarica carrelli - Settore 7 Mag. 111': 3.00 } },
 };
 
 export const AREA_ORDER = ['Area Gialla', 'Area Celeste', 'Area Rossa', 'Area Viola', 'Area Blu', 'Area Verde', 'Area Grigia', 'Area Arancione'];
@@ -91,14 +91,14 @@ export const INSPECTORS = [
 export const CALENDAR_AREAS = {
   '110': [
     { name: 'Area Gialla', color: '#eab308', reparti: ['Settore C', 'Tettoia ricarica carrelli LOG', 'Settore A', 'Settore B'] },
-    { name: 'Area Celeste', color: '#06b6d4', reparti: ['Tettoia vetro', 'Piazzale cauzioni', 'Carico laterale', 'Carico posteriore', 'Schiacciamento'] },
+    { name: 'Area Celeste', color: '#06b6d4', reparti: ['Tettoia vetro', 'Piazzale cauzioni', 'Carico laterale', 'Carico posteriore', 'Nuova Area Disposal'] },
     { name: 'Area Viola', color: '#a855f7', reparti: ['Fine linea', 'Magazzino Film/Destrosio', 'Scaffalatura Area 2200', 'Magazzino Lattine', 'Zone reso/consegna MP', 'Magazzino preforme A-PET', 'Piazzale scarico lattine'] },
     { name: 'Area Verde', color: '#22c55e', reparti: ['Magazzino Preforme', 'Magazzino Concentrati', 'Fine linea fusti', 'Fine linea BIB'] },
   ],
   '111': [
-    { name: 'Area Blu', color: '#3b82f6', reparti: ['Settore 4', 'Settore 5', 'Settore 6', 'Tettoia ricarica carrelli'] },
+    { name: 'Area Blu', color: '#3b82f6', reparti: ['Settore 4', 'Settore 5', 'Settore 6', 'Tettoia ricarica carrelli - Settore 4 Mag. 111'] },
     { name: 'Area Rossa', color: '#ef4444', reparti: ['Settore 1', 'Settore 2', 'Settore 3'] },
-    { name: 'Area Arancio', color: '#f97316', reparti: ['Settore 7', 'Settore 8'] },
+    { name: 'Area Arancio', color: '#f97316', reparti: ['Settore 7', 'Settore 8', 'Tettoia ricarica carrelli - Settore 7 Mag. 111'] },
     { name: 'Area Grigia', color: '#6b7280', reparti: ['Parcheggio Parolini', '110 - Tettoia AWS', '110 - Tettoia ricarica carrelli MAN', '110 - Perimetro esterno lato ferrovia', 'Area ecologica', 'Parcheggi ST', 'Perimetro esterno'] },
   ],
 };

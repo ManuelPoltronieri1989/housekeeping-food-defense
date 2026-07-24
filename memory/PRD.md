@@ -58,6 +58,11 @@ Italian (it-IT) — sempre rispondere all'utente in italiano.
   - "Andamento Settimanale per Area": aggiunta linea **Media** nera tratteggiata con etichetta numerica sopra ogni punto (Y-axis ora mode-aware Safety/Quality)
   - "Andamento Mensile per Area": multi-area colorato + linea Media nera tratteggiata con etichetta numerica sopra ogni punto
 - [DONE] **(2026-02-25)** Rimosso bottone "Esporta PDF" dalla Dashboard (dipendenze `html2canvas`/`jspdf` disinstallate)
+- [DONE] **(2026-07-24)** Rinominazioni reparti in `AREAS_REPARTI`, `REPARTI_SCORES`, `CALENDAR_AREAS`:
+  - Area Celeste: `Schiacciamento` → `Nuova Area Disposal`
+  - Area Blu: `Tettoia ricarica carrelli - 111` → `Tettoia ricarica carrelli - Settore 4 Mag. 111`
+  - Area Arancione: aggiunto `Tettoia ricarica carrelli - Settore 7 Mag. 111`
+  - Sezione Zone & Calendario aggiornata di conseguenza
 ## Endpoint API completi
 - `POST /api/auth/register` — registrazione (operator default, owner se email = OWNER_EMAIL)
 - `POST /api/auth/login`
